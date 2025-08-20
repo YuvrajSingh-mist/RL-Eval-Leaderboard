@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from app.api import submissions, leaderboard
 from app.db.session import init_db
 from app.core.config import settings
-from app.services import redis_leaderboard
+from app.services.leaderboard import redis_leaderboard
 import logging
 
 # Configure logging

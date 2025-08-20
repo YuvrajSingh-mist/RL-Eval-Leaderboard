@@ -20,15 +20,14 @@ class RedisLeaderboard:
         """Connect to Redis with proper configuration"""
         try:
             self.redis_client = redis.from_url(
-                settings.REDIS_URL,
-                db=settings.REDIS_LEADERBOARD_DB,
+                settings.REDIS_URL,  # This uses DB 0
                 socket_connect_timeout=5,
                 socket_timeout=5,
                 retry_on_timeout=True
             )
             # Test connection
             self.redis_client.ping()
-            logger.info("Connected to Redis leaderboard")
+            logger.info("Connected to Redis leaderboard (DB 0)")
         except Exception as e:
             logger.critical(f"Failed to connect to Redis: {str(e)}")
             raise
@@ -59,8 +58,8 @@ class RedisLeaderboard:
             }
             self.redis_client.hset(submission_key, mapping=submission_data)
             
-            # Set expiration (optional: keep for 30 days)
-            self.redis_client.expire(leaderboard_key, 30*24*60*60)  # 30 days
+            # Set expiration
+            self.redis_client.expire(leaderboard_key, 30*24*60*60)
             self.redis_client.expire(submission_key, 30*24*60*60)
             
             logger.info(f"Added submission {submission.id} to {submission.env_id} leaderboard")
@@ -77,7 +76,6 @@ class RedisLeaderboard:
             leaderboard_key = self.leaderboard_key.format(env_id=env_id)
             
             # Get top N submissions by score (descending)
-            # zrevrange = reverse range (highest scores first)
             submission_ids = self.redis_client.zrevrange(
                 leaderboard_key, 0, limit-1, withscores=True
             )

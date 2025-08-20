@@ -1,4 +1,3 @@
-
 import gradio as gr
 import requests
 import time
@@ -117,23 +116,16 @@ with gr.Blocks(title="RL Leaderboard", css=".status-box {font-size: 1.2em;}") as
             outputs=[status_box]
         )
         
-        gr.Examples(
-            examples=[
-                ["example_agents/dqn.py", "CartPole-v1", "DQN", "dqn_team"],
-                ["example_agents/ppo.py", "LunarLander-v2", "PPO", "ppo_experts"]
-            ],
-            inputs=[script_upload, env_dropdown, algorithm, user_id],
-            outputs=status_box
-        )
+        
     
     with gr.Tab("Leaderboard"):
-        env_selector = gr.Dropdown(
-            label="Environment", 
-            choices=ENVIRONMENTS, 
-            value="CartPole-v1"
-        )
-        leaderboard_btn = gr.Button("Refresh Leaderboard")
-        
+        with gr.Row():
+            env_selector = gr.Dropdown(
+                label="Environment", 
+                choices=ENVIRONMENTS, 
+                value="CartPole-v1"
+            )
+            leaderboard_btn = gr.Button("Refresh Leaderboard")
         leaderboard = gr.Dataframe(
             headers=["Rank", "User", "Score", "Algorithm", "Date"],
             datatype=["number", "str", "number", "str", "str"],
@@ -145,14 +137,17 @@ with gr.Blocks(title="RL Leaderboard", css=".status-box {font-size: 1.2em;}") as
             inputs=env_selector,
             outputs=leaderboard
         )
-        
-        # Auto-refresh every 30 seconds
-        demo.load(
-            fn=get_leaderboard,
-            inputs=env_selector,
-            outputs=leaderboard,
-            every=30
-        )
+
+        # Inject JS for auto-refresh every 30 seconds
+        gr.HTML("""
+        <script>
+        setInterval(function() {
+            const btn = Array.from(document.querySelectorAll("button"))
+                .find(b => b.innerText.includes("Refresh Leaderboard"));
+            if (btn) { btn.click(); }
+        }, 30000);
+        </script>
+        """)
     
     with gr.Tab("Check Status"):
         id_input = gr.Textbox(label="Submission ID", placeholder="Enter your submission ID")
@@ -164,4 +159,9 @@ with gr.Blocks(title="RL Leaderboard", css=".status-box {font-size: 1.2em;}") as
         )
 
 if __name__ == "__main__":
-    demo.launch(server_port=7860, show_api=False)
+    demo.launch(
+        server_name="0.0.0.0",  # Critical: bind to all interfaces
+        server_port=7860,       # Must match EXPOSE in Dockerfile
+        show_api=False,
+        debug=True
+    )

@@ -9,13 +9,18 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_:/var/lib/postgresql/data
     networks:
       - rl-net
 
   redis:
     image: redis:7
-    command: redis-server --save 60 1 --loglevel warning
+    command: >
+      sh -c "redis-server --requirepass ${REDIS_PASSWORD} --save 900 1 --save 300 10 --save 60 10000
+             --loglevel notice --maxmemory 256mb --maxmemory-policy allkeys-lru
+             --bind 0.0.0.0"
+    ports:
+      - "6379:6379"
     networks:
       - rl-net
 
@@ -27,19 +32,25 @@ services:
     volumes:
       - ./app:/home/appuser/app
       - ./submissions:/home/appuser/submissions
+      - ./example_agents:/home/appuser/example_agents
     ports:
       - "8000:8000"
     env_file: .env
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/leaderboard
       - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/2
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
     depends_on:
       - db
       - redis
     networks:
       - rl-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   worker:
     build:
@@ -48,18 +59,38 @@ services:
     command: celery -A app.core.celery.celery_app worker --loglevel=info
     volumes:
       - ./app:/home/appuser/app
+      - ./worker:/home/appuser/worker
       - ./submissions:/home/appuser/submissions
-      - /var/run/docker.sock:/var/run/docker.sock
+         redis:
+          image: redis:7
+          command: >
+            sh -c "redis-server --requirepass ${REDIS_PASSWORD} --save 900 1 --save 300 10 --save 60 10000 
+                   --loglevel notice --maxmemory 256mb --maxmemory-policy allkeys-lru
+                   --bind 0.0.0.0"
+          ports:
+            - "6379:6379"
+          networks:
+            - rl-net
+      # ...existing code...     - ./example_agents:/home/appuser/example_agents
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     env_file: .env
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/leaderboard
       - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/2
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DOCKER_HOST=unix:///var/run/docker.sock
     depends_on:
       - api
     networks:
       - rl-net
+    privileged: true
+    user: root
+    healthcheck:
+      test: ["CMD", "celery", "inspect", "ping", "-A", "app.core.celery"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   frontend:
     build:
@@ -70,15 +101,34 @@ services:
       - "7860:7860"
     volumes:
       - ./frontend:/home/appuser/frontend
+      - ./example_agents:/home/appuser/example_agents
     environment:
       - API_URL=http://api:8000
     depends_on:
       - api
     networks:
       - rl-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+      - REDIS_PASSWORD=
+      - HTTP_PORT=8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - rl-net
 
 volumes:
-  pg_data:
+  pg_:
 
 networks:
   rl-net:

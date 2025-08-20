@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.core.docker import run_evaluation_container
 from app.db.session import SessionLocal
 from app.models import Submission, EvaluationMetric
-from app.services.leaderboard import redis_leaderboard  # Import Redis leaderboard
+from app.services.leaderboard import redis_leaderboard
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,22 @@ def evaluate_submission(submission_id: str) -> dict:
             env_id=submission.env_id
         )
         
+        # CRITICAL: Check if container run was successful
+        if "error" in result:
+            logger.error(f"Container execution failed for {submission_id}: {result['error']}")
+            submission.status = "failed"
+            submission.error = result["error"]
+            db.commit()
+            
+            # Remove from leaderboard
+            try:
+                redis_leaderboard.remove_submission(submission_id, submission.env_id)
+            except Exception as e:
+                logger.error(f"Failed to remove from Redis leaderboard: {str(e)}")
+            
+            # Return proper error response
+            return {"status": "error", "message": result["error"]}
+        
         # Process results
         if result.get("status") == 0 and "score" in result.get("output", {}):
             # Successful evaluation
@@ -75,11 +92,14 @@ def evaluate_submission(submission_id: str) -> dict:
         else:
             # Evaluation failed
             error_msg = result.get("error", "Evaluation failed without specific error")
+            if "output" in result:
+                error_msg += f" | Output: {result['output']}"
+                
             submission.status = "failed"
             submission.error = error_msg[:500]
             logger.error(f"Evaluation failed for {submission_id}: {error_msg}")
             
-            # Remove from leaderboard if it existed
+            # Remove from leaderboard
             try:
                 redis_leaderboard.remove_submission(submission_id, submission.env_id)
             except Exception as e:
@@ -87,7 +107,12 @@ def evaluate_submission(submission_id: str) -> dict:
         
         # Commit final status
         db.commit()
-        return {"status": "success", "score": submission.score}
+        
+        # Return success only if evaluation was truly successful
+        if submission.status == "completed":
+            return {"status": "success", "score": submission.score}
+        else:
+            return {"status": "error", "message": submission.error}
     
     except Exception as e:
         # Handle unexpected errors

@@ -60,7 +60,7 @@ def train_dqn(env_id, episodes=50):
     
     # Return results in structured format
     result = {
-        "score": float(np.mean(metrics)),
+        "score": float(np.mean(metrics[-10:])),
         "metrics": metrics,
         "episodes": episodes
     }
