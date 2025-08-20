@@ -1,0 +1,23 @@
+
+# Core dependencies
+fastapi[all]
+uvicorn
+celery[redis]
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pydantic-settings
+redis
+
+# Docker client
+docker
+
+# RL Dependencies
+gym
+stable-baselines3
+torch
+numpy
+
+# Frontend
+gradio
+requests

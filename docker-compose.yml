@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    env_file: .env
+    environment:
+      POSTGRES_DB: leaderboard
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - rl-net
+
+  redis:
+    image: redis:7
+    command: redis-server --save 60 1 --loglevel warning
+    networks:
+      - rl-net
+
+  api:
+    build:
+      context: .
+      dockerfile: app/api/Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./app:/home/appuser/app
+      - ./submissions:/home/appuser/submissions
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/leaderboard
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/2
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - db
+      - redis
+    networks:
+      - rl-net
+
+  worker:
+    build:
+      context: .
+      dockerfile: app/worker/Dockerfile
+    command: celery -A app.core.celery.celery_app worker --loglevel=info
+    volumes:
+      - ./app:/home/appuser/app
+      - ./submissions:/home/appuser/submissions
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/leaderboard
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/2
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - api
+    networks:
+      - rl-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    command: python /home/appuser/frontend/gradio_app.py
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./frontend:/home/appuser/frontend
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    networks:
+      - rl-net
+
+volumes:
+  pg_data:
+
+networks:
+  rl-net:
+    driver: bridge
