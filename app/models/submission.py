@@ -29,3 +29,15 @@ class EvaluationMetric(Base):
     
     # Relationship to submission
     submission = relationship("Submission", back_populates="metrics")
+
+
+class LeaderboardEntry(Base):
+    __tablename__ = "leaderboard_entries"
+
+    id = Column(String, primary_key=True, index=True)  # UUID
+    submission_id = Column(String, index=True)
+    user_id = Column(String, index=True)
+    env_id = Column(String, index=True)
+    algorithm = Column(String, index=True)
+    score = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

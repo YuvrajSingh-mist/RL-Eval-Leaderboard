@@ -64,7 +64,8 @@ echo "INFO: Interpreter: $PY_VER"
 echo "INFO: Limits: timeout=300s nice=19 ionice=2/7 ulimit_vmem=524288KB"
 
 # Execute with strict limits and capture status
-python -u "$SCRIPT_PATH" "$ENV_ID"
+ulimit -v 524288
+timeout 300s nice -n 19 ionice -c 2 -n 7 python -u "$SCRIPT_PATH" "$ENV_ID"
 STATUS=$?
 END_TS=$(date +%s)
 DURATION=$((END_TS - START_TS))

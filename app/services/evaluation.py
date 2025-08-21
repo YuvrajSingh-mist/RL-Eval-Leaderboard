@@ -5,6 +5,7 @@ from app.db.session import SessionLocal
 from app.models import Submission, EvaluationMetric
 from app.core.docker import run_evaluation_container
 from app.core.config import settings
+from app.services.leaderboard import redis_leaderboard
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,11 @@ def evaluate_submission(submission_id: str) -> dict:
 
             logger.info(f"Evaluation completed for {submission_id}. Score: {submission.score}")
             db.commit()
+            # Push to Redis leaderboard for immediate visibility
+            try:
+                redis_leaderboard.add_submission(submission)
+            except Exception as e:
+                logger.error(f"Failed to update Redis leaderboard for {submission_id}: {str(e)}")
             return {"status": "completed", "score": submission.score}
 
         # Evaluation failed

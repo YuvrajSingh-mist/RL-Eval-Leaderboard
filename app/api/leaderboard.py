@@ -17,15 +17,9 @@ def get_leaderboard(
     Falls back to database if Redis fails
     """
     try:
-        # Get from Redis (primary source)
+        # Get from Redis (primary source) with DB fallback handled inside
         leaderboard = redis_leaderboard.get_leaderboard(env_id, limit)
-        
-        if leaderboard:
-            logger.info(f"Retrieved leaderboard from Redis for {env_id}")
-            return leaderboard
-        
-
-        
+        return leaderboard
     except Exception as e:
-        logger.error(f"Redis leaderboard failed: {str(e)}")
-        
+        logger.error(f"Leaderboard retrieval failed: {str(e)}")
+        return []

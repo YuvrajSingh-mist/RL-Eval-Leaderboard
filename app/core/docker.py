@@ -136,7 +136,13 @@ def run_evaluation_container(submission_id: str, env_id: str):
                 "com.rl_leaderboard.env_id": env_id
             },
             environment=env_vars,
-            # network_mode="none",  # No network access
+            network_mode="none",  # No network access
+            mem_limit="512m",     # 512MB memory limit
+            pids_limit=50,        # Max 50 processes
+            cpu_quota=50000,      # 50% of one CPU
+            security_opt=security_opts,
+            cap_drop=["ALL"],     # Drop all capabilities
+            detach=True
         )
         logger.info(f"Container created: {container.id}")
         # Inject submission.py inside container at /home/appuser

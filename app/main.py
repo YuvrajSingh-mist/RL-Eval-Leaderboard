@@ -30,6 +30,9 @@ def startup_event():
     try:
         redis_leaderboard.connect()
         logger.info("Redis leaderboard connected successfully")
+        # Backfill persistent entries and warm Redis
+        redis_leaderboard.sync_from_submissions()
+        redis_leaderboard.warm_redis_from_db()
     except Exception as e:
         logger.error(f"Failed to connect to Redis: {str(e)}")
         logger.info("Will use database fallback for leaderboard")

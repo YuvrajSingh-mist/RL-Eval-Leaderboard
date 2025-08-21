@@ -17,6 +17,7 @@ async def submit_rl_script(
     env_id: str = Form("CartPole-v1"),
     algorithm: str = Form("Custom"),
     user_id: str = Form("anonymous"),
+    client_id: str | None = Form(None),
     db: Session = Depends(get_db)
 ):
     # Validate file
@@ -24,8 +25,17 @@ async def submit_rl_script(
         logger.warning(f"Invalid file type submitted: {file.filename}")
         raise HTTPException(400, "Only Python scripts allowed")
     
-    # Create secure submission ID
-    submission_id = str(uuid.uuid4())
+    # Create or accept a client-provided submission ID (UUID)
+    try:
+        if client_id:
+            # Validate UUID format
+            _ = uuid.UUID(client_id)
+            submission_id = str(client_id)
+        else:
+            submission_id = str(uuid.uuid4())
+    except Exception:
+        logger.warning(f"Invalid client_id provided: {client_id}")
+        raise HTTPException(400, "client_id must be a valid UUID")
     
     try:
         # Upload to Supabase Storage
