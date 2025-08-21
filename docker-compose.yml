@@ -1,3 +1,4 @@
+
 version: '3.8'
 
 services:
@@ -15,10 +16,12 @@ services:
 
   redis:
     image: redis:7
+    env_file: .env
     command: >
-      sh -c "redis-server --requirepass ${REDIS_PASSWORD} --save 900 1 --save 300 10 --save 60 10000
+      sh -c "redis-server --save 900 1 --save 300 10 --save 60 10000 
              --loglevel notice --maxmemory 256mb --maxmemory-policy allkeys-lru
-             --bind 0.0.0.0"
+             --bind 0.0.0.0
+             --disable-command-security-warnings yes"
     ports:
       - "6379:6379"
     networks:
@@ -31,8 +34,6 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./app:/home/appuser/app
-      - ./submissions:/home/appuser/submissions
-      - ./example_agents:/home/appuser/example_agents
     ports:
       - "8000:8000"
     env_file: .env
@@ -41,6 +42,10 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - SUPABASE_BUCKET=${SUPABASE_BUCKET}
     depends_on:
       - db
       - redis
@@ -56,29 +61,26 @@ services:
     build:
       context: .
       dockerfile: app/worker/Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+      x-bake:
+        # platforms:
+        #   - linux/amd64
     command: celery -A app.core.celery.celery_app worker --loglevel=info
     volumes:
       - ./app:/home/appuser/app
       - ./worker:/home/appuser/worker
-      - ./submissions:/home/appuser/submissions
-         redis:
-          image: redis:7
-          command: >
-            sh -c "redis-server --requirepass ${REDIS_PASSWORD} --save 900 1 --save 300 10 --save 60 10000 
-                   --loglevel notice --maxmemory 256mb --maxmemory-policy allkeys-lru
-                   --bind 0.0.0.0"
-          ports:
-            - "6379:6379"
-          networks:
-            - rl-net
-      # ...existing code...     - ./example_agents:/home/appuser/example_agents
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     env_file: .env
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/leaderboard
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - SUPABASE_BUCKET=${SUPABASE_BUCKET}
       - DOCKER_HOST=unix:///var/run/docker.sock
     depends_on:
       - api
@@ -92,6 +94,15 @@ services:
       timeout: 10s
       retries: 3
 
+  evaluator:
+    image: rl-evaluator:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.evaluator
+    platform: linux/arm64
+    profiles:
+      - evaluator
+
   frontend:
     build:
       context: .
@@ -101,7 +112,6 @@ services:
       - "7860:7860"
     volumes:
       - ./frontend:/home/appuser/frontend
-      - ./example_agents:/home/appuser/example_agents
     environment:
       - API_URL=http://api:8000
     depends_on:
@@ -117,9 +127,10 @@ services:
   redis-commander:
     image: rediscommander/redis-commander:latest
     environment:
-      - REDIS_HOSTS=local:redis:6379
-      - REDIS_PASSWORD=
+      - REDIS_HOSTS=broker:redis:6379:1,default:redis:6379:0
       - HTTP_PORT=8081
+      - REDIS_CONNECTION_MODE=direct
+      - REDIS_PASSWORD=
     ports:
       - "8081:8081"
     depends_on:

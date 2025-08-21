@@ -7,7 +7,7 @@ RUN useradd -m appuser
 WORKDIR /home/appuser
 
 # Install Gradio and requests
-RUN pip install --no-cache-dir gradio requests
+RUN pip install gradio requests
 
 # Copy frontend code
 COPY frontend /home/appuser/frontend

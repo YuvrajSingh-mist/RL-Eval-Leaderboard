@@ -1,11 +1,11 @@
-
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Submission
 from app.core.celery import evaluate_submission_task
+from app.core.client import supabase_client
+from app.core.config import settings
 import uuid
-import os
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,9 +14,9 @@ router = APIRouter()
 @router.post("/submit/")
 async def submit_rl_script(
     file: UploadFile = File(...),
-    env_id: str = "CartPole-v1",
-    algorithm: str = "Custom",
-    user_id: str = "anonymous",
+    env_id: str = Form("CartPole-v1"),
+    algorithm: str = Form("Custom"),
+    user_id: str = Form("anonymous"),
     db: Session = Depends(get_db)
 ):
     # Validate file
@@ -26,15 +26,23 @@ async def submit_rl_script(
     
     # Create secure submission ID
     submission_id = str(uuid.uuid4())
-    file_path = f"./submissions/{submission_id}.py"
     
-    # Save to secure location
     try:
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
+        # Upload to Supabase Storage
+        content = await file.read()
+        result = supabase_client.storage.from_(settings.SUPABASE_BUCKET).upload(
+            f"{submission_id}.py",
+            content,
+            file_options={"content-type": "text/plain", "upsert": "true"}
+        )
+        
+        if hasattr(result, 'error') and result.error:
+            raise Exception(f"Supabase upload failed: {result.error}")
+            
+        logger.info(f"Uploaded {submission_id}.py to Supabase")
+        
     except Exception as e:
-        logger.error(f"Failed to save submission {submission_id}: {str(e)}")
+        logger.error(f"Failed to upload to Supabase {submission_id}: {str(e)}")
         raise HTTPException(500, "Failed to save submission")
     
     # Create DB record

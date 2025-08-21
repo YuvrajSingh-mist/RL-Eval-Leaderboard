@@ -85,8 +85,8 @@ def check_status(submission_id):
 
 # Environment configuration
 ENVIRONMENTS = [
-    "CartPole-v1", "LunarLander-v2", 
-    "MountainCar-v0", "Acrobot-v1"
+    "CartPole-v1", "LunarLander-v2", "LunarLanderContinuous-v2",
+    "MountainCar-v0", "Acrobot-v1", "Pendulum-v1", "FrozenLake-v1"
 ]
 
 with gr.Blocks(title="RL Leaderboard", css=".status-box {font-size: 1.2em;}") as demo:

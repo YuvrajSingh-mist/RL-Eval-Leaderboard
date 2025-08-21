@@ -6,8 +6,8 @@ FROM  python:3.10-slim
 RUN useradd -m appuser
 WORKDIR /home/appuser
 
-# Copy requirements and install
-COPY requirements.txt .
+# Copy minimal API requirements and install (keeps cache stable)
+COPY requirements.api.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

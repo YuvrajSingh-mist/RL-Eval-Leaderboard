@@ -1,4 +1,3 @@
-
 fastapi[all]
 uvicorn
 celery[redis]
@@ -10,3 +9,4 @@ redis
 docker
 requests
 supabase
+

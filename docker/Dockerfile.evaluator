@@ -1,29 +1,31 @@
 
-# Evaluator service Dockerfile
 FROM python:3.10-slim
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y ffmpeg libsm6 libxext6 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    coreutils \
+    util-linux \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN useradd -m appuser
 WORKDIR /home/appuser
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-
-# Copy entrypoint script
-COPY scripts/entrypoint.sh /home/appuser/entrypoint.sh
-
-# Set execute permission
-RUN chmod +x /home/appuser/entrypoint.sh
-
+# Install Python dependencies (heavy ones isolated here)
+COPY requirements.evaluator.txt ./requirements.txt
+RUN pip install -r requirements.txt
 
 # Switch to non-root user
 USER appuser
 
+# Copy entrypoint script
+COPY --chown=appuser:appuser scripts/entrypoint.sh /home/appuser/entrypoint.sh
 
-# This will be used when running evaluation containers
+# Set execute permission
+RUN chmod +x /home/appuser/entrypoint.sh
+
+# Default entrypoint for the evaluator image; the container run may override
 ENTRYPOINT ["/home/appuser/entrypoint.sh"]
