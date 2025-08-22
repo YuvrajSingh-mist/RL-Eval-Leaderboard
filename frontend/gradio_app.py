@@ -1,63 +1,37 @@
+# from app.core.docker import logger
 import gradio as gr
 import requests
 import time
 import json
 from datetime import datetime, timezone
 import os
-
+import logging
 API_URL = os.getenv("API_URL", "http://localhost:8000")
+PORT = int(os.getenv("PORT", "7860"))
 _last_submission_id = None
+logger = logging.getLogger(__name__)
 
-def submit_script(primary_file, extra_files, main_filename, env_id, algorithm, user_id):
-    # Backward-compatible UX: user can provide either one file or multiple
-    if not primary_file and not (extra_files and len(extra_files) > 0):
-        return "⚠️ Please upload at least one Python script", ""
+
+    
+def submit_script(file, env_id, algorithm, user_id):
+    # Single-file only
+    if not file:
+        return "⚠️ Please upload a Python script (.py)"
 
     try:
         import uuid as _uuid
         client_id = str(_uuid.uuid4())
 
-        # Decide whether to send multiple files or single
-        submit_files = []
-        if extra_files and len(extra_files) > 0:
-            # Multi-part: include extra_files and primary_file if present
-            # Gradio's File component gives a tempfile path per file
-            def _as_tuple(f):
-                # requests expects (filename, fileobj, mimetype)
-                return ('files', (f.name, open(f.name, 'rb'), 'text/plain'))
-            for f in (extra_files or []):
-                submit_files.append(_as_tuple(f))
-            if primary_file:
-                submit_files.append(_as_tuple(primary_file))
-            # Require main file name when multiple files are uploaded
-            mf_name = (main_filename or '').strip()
-            if not mf_name:
-                return "⚠️ Please specify the main .py filename for multi-file submissions", ""
-            # Validate at least one .py present and main_file endswith .py
-            names = [getattr(f, 'orig_name', None) or os.path.basename(f.name) for f in (extra_files or [])]
-            if primary_file:
-                names.append(getattr(primary_file, 'orig_name', None) or os.path.basename(primary_file.name))
-            if not any(str(n).lower().endswith('.py') for n in names):
-                return "⚠️ Multi-file upload must include at least one .py file", ""
-            if not mf_name.lower().endswith('.py'):
-                return "⚠️ main_file must end with .py", ""
-            data = {
-                'env_id': env_id,
-                'algorithm': algorithm,
-                'user_id': user_id or "anonymous",
-                'client_id': client_id,
-                'main_file': mf_name
-            }
-        else:
-            # Single-file path
-            files = {'file': (primary_file.name, open(primary_file.name, 'rb'), 'text/plain')}
-            data = {
-                'env_id': env_id,
-                'algorithm': algorithm,
-                'user_id': user_id or "anonymous",
-                'client_id': client_id
-            }
-            submit_files = files
+        # Single-file path only
+        if not str(file.name).lower().endswith('.py'):
+            return "⚠️ Only .py files are accepted"
+        submit_files = {'file': (file.name, open(file.name, 'rb'), 'text/plain')}
+        data = {
+            'env_id': env_id,
+            'algorithm': algorithm,
+            'user_id': user_id or "anonymous",
+            'client_id': client_id
+        }
 
         response = requests.post(f"{API_URL}/api/submit/", files=submit_files, data=data)
         
@@ -68,32 +42,32 @@ def submit_script(primary_file, extra_files, main_filename, env_id, algorithm, u
             _last_submission_id = result.get('id', client_id)
             sid = _last_submission_id
             html = f"""
-            <div class="status-box success">
-              <div class="status-header">
+            <div class=\"status-box success\">
+              <div class=\"status-header\">
                 <span>✅</span>
                 <span>Submission queued</span>
-                <span class="status-pill">Waiting to evaluate</span>
+                <span class=\"status-pill\">Waiting to evaluate</span>
               </div>
-              <div class="status-id">
+              <div class=\"status-id\">
                 <b>ID:</b> <code>{sid}</code>
-                <button class="copy-btn" onclick="navigator.clipboard.writeText('{sid}'); this.innerText='Copied'; setTimeout(()=>{{ this.innerText='Copy ID'; }}, 1600);">Copy ID</button>
+                <button class=\"copy-btn\" onclick=\"navigator.clipboard.writeText('{sid}'); this.innerText='Copied'; setTimeout(()=>{{ this.innerText='Copy ID'; }}, 1600);\">Copy ID</button>
               </div>
-              <div class="status-kv">
-                <div class="label">Environment</div><div class="value">{result['env_id']}</div>
-                <div class="label">Algorithm</div><div class="value">{result['algorithm']}</div>
+              <div class=\"status-kv\">
+                <div class=\"label\">Environment</div><div class=\"value\">{result['env_id']}</div>
+                <div class=\"label\">Algorithm</div><div class=\"value\">{result['algorithm']}</div>
               </div>
-              <div class="status-foot">Use this ID in the <i>Check Status</i> tab.</div>
+              <div class=\"status-foot\"><b>Keep your Submission ID safe!</b> You'll need it in the <i>Check Status</i> tab to view progress and error logs.</div>
             </div>
             """
-            return html, sid
+            return html
         else:
             error_detail = response.json().get('detail', 'Unknown error')
-            return f"❌ Error {response.status_code}: {error_detail}", ""
+            return f"❌ Error {response.status_code}: {error_detail}"
             
     except Exception as e:
-        return f"❌ Error: {str(e)}", ""
+        return f"❌ Error: {str(e)}"
 
-def get_leaderboard(env_id, id_query, algorithm_query, score_min, score_max, sort_order):
+def get_leaderboard(env_id, id_query, user_query, algorithm_query, score_min, score_max, sort_order):
     """Fetch leaderboard from API using server-side filters/sorting and render rows."""
     try:
         # Map UI sort order to API sort values
@@ -123,6 +97,8 @@ def get_leaderboard(env_id, id_query, algorithm_query, score_min, score_max, sor
         params = {"env_id": env_id, "limit": 200, "sort": sort}
         if id_query:
             params["id_query"] = str(id_query).strip()
+        if user_query:
+            params["user"] = str(user_query).strip()
         if algorithm_query:
             params["algorithm"] = str(algorithm_query).strip()
         if score_min is not None and str(score_min) != "":
@@ -157,8 +133,21 @@ def get_leaderboard(env_id, id_query, algorithm_query, score_min, score_max, sor
             score_val = e.get("score")
             score_num = float(score_val) if isinstance(score_val, (int, float)) else None
 
+            rank_val = e.get("rank", None)
+            medal = ""
+            try:
+                if int(rank_val) == 1:
+                    medal = "🥇 "
+                elif int(rank_val) == 2:
+                    medal = "🥈 "
+                elif int(rank_val) == 3:
+                    medal = "🥉 "
+            except Exception:
+                pass
+            rank_str = f"{medal}{rank_val}" if rank_val is not None else "-"
+
             table.append([
-                e.get("rank", None),
+                rank_str,
                 e.get("id", ""),
                 e.get("user_id", "Unknown"),
                 score_num,
@@ -195,11 +184,12 @@ def check_status(submission_id):
         from html import escape as _escape
         if status == 'completed':
             status_html = f"✅ Completed\nID: {_escape(submission_id)}\nScore: {score_num:.2f}" if score_num is not None else f"✅ Completed\nID: {_escape(submission_id)}"
-            return status_html, score_num
+            score_text = f"{score_num:.2f}" if score_num is not None else "N/A"
+            return status_html, score_text
         elif status == 'processing':
-            return f"⚙️ Currently evaluating\nID: {_escape(submission_id)}", None
+            return f"⚙️ Currently evaluating\nID: {_escape(submission_id)}", "In progress"
         elif status == 'pending':
-            return f"⏳ Queued for evaluation\nID: {_escape(submission_id)}", None
+            return f"⏳ Queued for evaluation\nID: {_escape(submission_id)}", "In progress"
         elif status == 'failed':
             err = str(result.get('error', 'Unknown error'))
             status_html = f"""
@@ -210,19 +200,13 @@ def check_status(submission_id):
   <pre style='white-space:pre-wrap; background:#111; color:#eee; padding:8px; border-radius:4px'>{_escape(err)}</pre>
 </div>
 """
-            return status_html, None
+            return status_html, "Failed"
         else:
-            return f"❓ Unknown status\nID: {_escape(submission_id)}", None
+            return f"❓ Unknown status\nID: {_escape(submission_id)}", "Unknown"
     except Exception as e:
         return f"❌ Error: {str(e)}", None
 
-# Environment configuration
-ENVIRONMENTS = [
-    "CartPole-v1", "LunarLander-v2", "LunarLanderContinuous-v2",
-    "MountainCar-v0", "Acrobot-v1", "Pendulum-v1", "FrozenLake-v1"
-]
-
-with gr.Blocks(title="RL Leaderboard", css="""
+with gr.Blocks(title="SimpleRL Leaderboard", css="""
 .status-box {
   font-size: 1rem;
   background: linear-gradient(180deg, rgba(32,59,49,.5), rgba(17,32,27,.5));
@@ -262,7 +246,46 @@ with gr.Blocks(title="RL Leaderboard", css="""
 .status-foot { margin-top: 10px; color: #9ecfb6; font-size: .95em; }
 .status-box pre { white-space: pre-wrap; background: #111; color: #eee; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.06); }
 """) as demo:
-    gr.Markdown("# 🏆 Reinforcement Learning Leaderboard")
+    gr.Markdown("# 🏆 SimpleRL Leaderboard")
+    
+    # About / README tab
+    def _load_readme_text():
+        try:
+            here = os.path.dirname(__file__)
+            readme_path = os.path.abspath(os.path.join(here, "..", "README.md"))
+            if os.path.exists(readme_path):
+                with open(readme_path, "r", encoding="utf-8") as f:
+                    return f.read()
+        except Exception:
+            logger.exception("Failed to load README.md")
+        return None
+    _README_TEXT = _load_readme_text()
+
+    with gr.Tab("About"):
+        gr.Markdown(
+            """
+            ### About
+            **SimpleRL Leaderboard** lets you submit a single-file Python RL agent for automatic evaluation on popular Gym/Gymnasium environments. Your results appear on the Leaderboard, and you can track progress using your Submission ID.
+
+            ### How to submit
+            - **1. Choose environment**: Pick a Gym environment from the dropdown (use Refresh Envs if empty).
+            - **2. Algorithm name**: Enter a short label for your method (e.g., "DQN").
+            - **3. Optional user ID**: Any string to identify you or your team.
+            - **4. Upload script**: Provide a single `.py` file containing your agent implementation.
+            - **5. Submit**: Click "Submit for Evaluation". Copy the shown **Submission ID**.
+            - **6. Check progress**: Use the ID in the "Check Status" tab or wait for the Leaderboard to update.
+
+            Tip: See the example agent at `example_agents/dqn.py` in this repository.
+
+            ### Tabs guide
+            - **Submit Agent**: Upload a `.py` file, choose environment and algorithm name, then submit. Keep the Submission ID to monitor results or debug failures.
+            - **Leaderboard**: Browse scores for the selected environment. Use filters (ID, User, Algorithm, score range) and sorting. The table auto-refreshes periodically; you can also click Refresh.
+            - **Check Status**: Paste your Submission ID to see whether it is queued, processing, completed (with final score), or failed (with error details).
+            """
+        )
+        if _README_TEXT:
+            with gr.Accordion("Full Project README", open=False):
+                gr.Markdown(_README_TEXT)
     
     with gr.Tab("Submit Agent"):
         with gr.Row():
@@ -270,28 +293,21 @@ with gr.Blocks(title="RL Leaderboard", css="""
                 user_id = gr.Textbox(label="Your ID (optional)", placeholder="e.g., team-rocket")
                 env_dropdown = gr.Dropdown(
                     label="Gym Environment", 
-                    choices=ENVIRONMENTS, 
-                    value="CartPole-v1"
+                    choices=[], 
+                    value=None
                 )
+                env_reload_btn = gr.Button("Refresh Envs", size="sm")
                 algorithm = gr.Textbox(label="Algorithm Name", value="Custom DQN")
-                script_upload = gr.File(label="Main Script (.py)", file_types=['.py'])
-                extra_uploads = gr.File(label="Additional Files (any)", file_count="multiple")
-                main_file_name = gr.Textbox(label="Main file name (optional)", placeholder="e.g., main.py or submission.py")
-                submit_btn = gr.Button("Submit for Evaluation", variant="primary")
+                script_upload = gr.File(label="Script (.py)", file_types=['.py'])
+                submit_btn = gr.Button("Submit for Evaluation", variant="primary", elem_id="submit-eval-btn")
             
             with gr.Column():
-                status_box = gr.HTML(value="<div class='status-box'>Submit your agent to start!</div>")
-                submission_id_box = gr.Textbox(label="Submission ID", interactive=False)
-                try:
-                    # Some versions support copy button
-                    submission_id_box.show_copy_button = True
-                except Exception:
-                    pass
+                status_box = gr.HTML(value="<div class='status-box'>Submit your agent to start!<br/><small><b>Note:</b> Only a single-file Python implementation is accepted. Keep your <b>Submission ID</b> safe to check status and error logs later.</small></div>")
         
         submit_btn.click(
             fn=submit_script,
-            inputs=[script_upload, extra_uploads, main_file_name, env_dropdown, algorithm, user_id],
-            outputs=[status_box, submission_id_box]
+            inputs=[script_upload, env_dropdown, algorithm, user_id],
+            outputs=[status_box]
         )
         
         
@@ -300,18 +316,20 @@ with gr.Blocks(title="RL Leaderboard", css="""
         with gr.Row():
             env_selector = gr.Dropdown(
                 label="Environment", 
-                choices=ENVIRONMENTS, 
-                value="CartPole-v1"
+                choices=[], 
+                value=None
             )
+            envs_refresh_btn = gr.Button("Refresh Envs", elem_id="refresh-envs-btn")
             leaderboard_btn = gr.Button("Refresh Leaderboard", variant="primary")
 
         with gr.Accordion("Filters", open=False):
             with gr.Row():
                 id_filter = gr.Textbox(label="Submission ID contains", placeholder="UUID or part")
+                user_filter = gr.Textbox(label="User contains", placeholder="e.g., alice")
                 algorithm_filter = gr.Textbox(label="Algorithm contains", placeholder="e.g., DQN")
             with gr.Row():
                 score_min = gr.Number(label="Min score")
-                score_max = gr.Number(label="Max score")
+                score_max = gr.Number(label="Max score", value=100)
                 sort_order = gr.Dropdown(
                     label="Sort order",
                     choices=["Score (desc)", "Date (newest)", "Date (oldest)"],
@@ -321,7 +339,7 @@ with gr.Blocks(title="RL Leaderboard", css="""
 
         leaderboard = gr.Dataframe(
             headers=["Rank", "Submission ID", "User", "Score", "Algorithm", "Date (UTC)"],
-            datatype=["number", "str", "str", "number", "str", "str"],
+            datatype=["str", "str", "str", "number", "str", "str"],
             col_count=(6, "fixed"),
             elem_id="leaderboard-table"
         )
@@ -330,18 +348,59 @@ with gr.Blocks(title="RL Leaderboard", css="""
 
         leaderboard_btn.click(
             fn=get_leaderboard,
-            inputs=[env_selector, id_filter, algorithm_filter, score_min, score_max, sort_order],
+            inputs=[env_selector, id_filter, user_filter, algorithm_filter, score_min, score_max, sort_order],
             outputs=leaderboard
         )
 
-        # Inject JS for auto-refresh every 30 seconds
+        # Fetch environments from backend endpoint
+        def fetch_envs():
+            try:
+                res = requests.get(f"{API_URL}/api/leaderboard/environments")
+                if res.status_code == 200:
+                    envs = res.json().get("envs", [])
+                    if envs:
+                        return gr.update(choices=envs, value=envs[0])
+                    else:
+                        logger.error("Environments endpoint returned empty list")
+                else:
+                    logger.error(f"Failed to fetch environments: status {res.status_code}")
+            except Exception:
+                logger.exception("Error fetching environments")
+            defaults = [
+                "CartPole-v1","MountainCar-v0","Acrobot-v1","Pendulum-v1",
+                "FrozenLake-v1","LunarLander-v2","LunarLanderContinuous-v2"
+            ]
+            return gr.update(choices=defaults, value=defaults[0])
+
+        def fetch_envs_both():
+            upd = fetch_envs()
+            return upd, upd
+
+        envs_refresh_btn.click(fn=fetch_envs, inputs=None, outputs=env_selector)
+        env_reload_btn.click(fn=fetch_envs, inputs=None, outputs=env_dropdown)
+
+        # Inject JS for auto-refresh every 30 seconds and default to Leaderboard
         gr.HTML("""
         <style>
         #leaderboard-table table { font-size: 0.95rem; }
         #leaderboard-table thead th { position: sticky; top: 0; background: #161616; color: #f3f3f3; }
-        #leaderboard-table td:nth-child(1),
         #leaderboard-table td:nth-child(4) { text-align: right; font-variant-numeric: tabular-nums; }
         #leaderboard-table td, #leaderboard-table th { padding: 8px 12px; }
+        /* Make Refresh Envs button align and size similarly to primary button */
+        #refresh-envs-btn button, #refresh-envs-btn {
+          padding: 8px 12px !important;
+          height: 40px !important;
+          line-height: 24px !important;
+          margin-left: 8px !important;
+        }
+        /* Orange accent for Submit button */
+        #submit-eval-btn button, #submit-eval-btn { 
+          background: linear-gradient(180deg, #ff8c1a, #e67600) !important; 
+          border: 1px solid #cc6a00 !important; color: #1b1b1b !important; 
+        }
+        #submit-eval-btn:hover button, #submit-eval-btn:hover { 
+          background: linear-gradient(180deg, #ffa64d, #ff8c1a) !important; 
+        }
         </style>
         <script>
         setInterval(function() {
@@ -349,13 +408,22 @@ with gr.Blocks(title="RL Leaderboard", css="""
                 .find(b => b.innerText.includes("Refresh Leaderboard"));
             if (btn) { btn.click(); }
         }, 30000);
+        window.addEventListener('load', function(){
+          const tab = Array.from(document.querySelectorAll('[role="tab"], .tabitem')).find(el => (el.innerText||'').includes('Leaderboard'));
+          if (tab) { try { tab.click(); } catch(e){} }
+        });
         </script>
         """)
+
+        # Populate environment dropdowns on load using backend discovery
+        demo.load(fn=fetch_envs_both, inputs=None, outputs=[env_selector, env_dropdown])
     
     with gr.Tab("Check Status"):
+        status_box_cs = gr.HTML(value="<div class='status-box'>Enter a submission ID and click Check.</div>")
+        # hint = gr.Markdown("Enter a submission ID and click Check.")
         id_input = gr.Textbox(label="Submission ID", placeholder="Enter your submission ID")
         check_btn = gr.Button("Check Status")
-        status_box_cs = gr.HTML(value="<div class='status-box'>Enter a submission ID and click Check.</div>")
+       
         score_display_cs = gr.Number(label="Final Score", interactive=False)
         check_btn.click(
             fn=check_status,
@@ -365,8 +433,8 @@ with gr.Blocks(title="RL Leaderboard", css="""
 
 if __name__ == "__main__":
     demo.launch(
-        server_name="0.0.0.0",  # Critical: bind to all interfaces
-        server_port=7860,       # Must match EXPOSE in Dockerfile
+        server_name="0.0.0.0",
+        server_port=PORT,
         show_api=False,
         debug=True
     )

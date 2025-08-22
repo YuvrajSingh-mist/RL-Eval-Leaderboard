@@ -70,10 +70,26 @@ LEADERBOARD_QUERY_DURATION_SECONDS = Histogram(
 )
 
 # Celery queue backlog
+# In multiprocess mode, Gauges must declare an aggregation strategy.
+_is_mp = bool(os.getenv("PROMETHEUS_MULTIPROC_DIR"))
+_gauge_kwargs = {"multiprocess_mode": "max"} if _is_mp else {}
 CELERY_QUEUE_LENGTH = Gauge(
     "celery_queue_length",
     "Length of Celery broker queue in Redis",
     labelnames=("queue_name",),
+    **_gauge_kwargs,
+)
+
+
+# Environment listing
+ENVIRONMENTS_LIST_REQUESTS_TOTAL = Counter(
+    "environments_list_requests_total",
+    "Total /environments requests",
+)
+
+ENVIRONMENTS_LIST_FAILURES_TOTAL = Counter(
+    "environments_list_failures_total",
+    "Failures during environment list discovery",
 )
 
 
@@ -95,13 +111,36 @@ def init_fastapi_instrumentation(app) -> None:
 def start_worker_metrics_server(port: Optional[int] = None) -> None:
     """Start a Prometheus metrics HTTP server for the worker process.
 
-    For multi-process Celery setups, prefer using the multiprocess mode of
-    prometheus_client. This simplified server works best for single-process
-    workers (e.g., --concurrency=1) to avoid port conflicts.
+    Supports both single-process and multiprocess (prefork) Celery workers.
+    When PROMETHEUS_MULTIPROC_DIR is set, we expose a registry backed by
+    prometheus_client.multiprocess.MultiProcessCollector so that counters
+    aggregated from child processes are visible to Prometheus.
     """
     p = int(port or os.getenv("WORKER_METRICS_PORT", "9100"))
     try:
-        start_http_server(p)
+        mp_dir = os.getenv("PROMETHEUS_MULTIPROC_DIR")
+        if mp_dir:
+            try:
+                # Ensure directory exists and clean stale files on startup
+                os.makedirs(mp_dir, exist_ok=True)
+                for fname in os.listdir(mp_dir):
+                    if fname.endswith(".db"):
+                        try:
+                            os.remove(os.path.join(mp_dir, fname))
+                        except Exception:
+                            pass
+            except Exception:
+                # best effort; do not crash worker
+                pass
+
+            # Build a dedicated multiprocess registry
+            from prometheus_client import CollectorRegistry, multiprocess
+
+            registry = CollectorRegistry()
+            multiprocess.MultiProcessCollector(registry)
+            start_http_server(p, registry=registry)
+        else:
+            start_http_server(p)
     except OSError:
         # Port already in use; ignore to prevent crash in forked workers
         pass

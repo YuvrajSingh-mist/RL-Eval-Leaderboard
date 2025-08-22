@@ -1,4 +1,4 @@
-# RL Leaderboard
+# OpenRL Leaderboard
 
 A production-ready, containerized leaderboard system for evaluating Reinforcement Learning (RL) agents. It provides a FastAPI backend, a Celery worker that safely evaluates submissions inside a locked-down Docker container, real-time leaderboards powered by Redis, persistent results in PostgreSQL, and a Gradio-based frontend.
 
@@ -253,6 +253,82 @@ Notes on the evaluator runtime (see `scripts/entrypoint.sh` and `app/core/docker
 - The worker parses container logs and extracts the last valid JSON line. If no `score` is found or the process exits non-zero, the submission is marked failed with a helpful log tail.
 
 See `example_agents/dqn.py` for a simple reference implementation.
+
+### Exact JSON Output Requirements
+
+- Required: `score` (number)
+- Optional: `metrics` (array of numbers, e.g., per-episode rewards)
+- Optional: `episodes` (integer)
+- Single final line: The evaluator extracts the last valid JSON object from your combined stdout/stderr. Ensure your final print is the JSON line and do not print anything after it.
+- Be strict: Use `json.dumps(...)` for the final print. Avoid printing Python dicts directly.
+
+Minimal schema (informal):
+```json
+{
+  "type": "object",
+  "required": ["score"],
+  "properties": {
+    "score": { "type": "number" },
+    "metrics": { "type": "array", "items": { "type": "number" } },
+    "episodes": { "type": "integer" }
+  }
+}
+```
+
+### Minimal `submission.py` template (with main function)
+
+```python
+import sys
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+def train(env_id: str) -> dict:
+    """Run your algorithm and return a dict with at least 'score'."""
+    # TODO: Implement your algorithm here
+    metrics = []
+    score = 0.0
+    return {"score": float(score), "metrics": metrics}
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Missing environment ID"}))
+        sys.exit(1)
+
+    env_id = sys.argv[1]
+    logger.info(f"Starting evaluation for env_id={env_id}")
+
+    result = train(env_id)
+    if not isinstance(result, dict) or "score" not in result:
+        print(json.dumps({"error": "Result must be a dict containing 'score'"}))
+        sys.exit(1)
+
+    # Print exactly one final JSON line. Do not print anything after this.
+    print(json.dumps({
+        "score": float(result["score"]),
+        "metrics": result.get("metrics", [])
+    }))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Local smoke test
+
+- Run your script locally to verify it prints one final JSON line:
+```bash
+python submission.py CartPole-v1
+```
+- You should see a single-line JSON with a numeric `score` as the last output.
+
+### Checklist before submitting
+
+- `python -u submission.py <ENV_ID>` works locally and prints a final JSON line
+- The last printed line contains a numeric `score`
+- No extra prints after the final JSON line
+- Optional `metrics` is an array of numbers (if included)
+- If multi-file, you uploaded all required modules and set `main_file` correctly
 
 ---
 

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/submit/")
+@router.post("/submit")
 async def submit_rl_script(
     # Backward-compat single file
     file: UploadFile | None = File(None),
@@ -63,7 +64,7 @@ async def submit_rl_script(
         safe_names = []
         for f in files:
             if not f.filename:
-                logger.warning("Empty filename in upload")
+                logger.warning("Empty filename in upload", extra={"client_id": client_id})
                 SUBMISSIONS_VALIDATION_FAILURES_TOTAL.labels(reason="empty_filename").inc()
                 raise HTTPException(400, "Invalid file in upload")
             safe_names.append(os.path.basename(f.filename))
@@ -78,7 +79,10 @@ async def submit_rl_script(
             if cand in safe_names:
                 chosen_main = cand
             else:
-                logger.warning(f"main_file not in uploaded files: {main_file}")
+                logger.warning(
+                    f"main_file not in uploaded files: {main_file}",
+                    extra={"client_id": client_id},
+                )
                 raise HTTPException(400, "main_file must match one of the uploaded file names")
         else:
             # Explicitly require main_file when multiple files are uploaded
@@ -130,17 +134,32 @@ async def submit_rl_script(
             )
             if hasattr(result, 'error') and result.error:
                 raise Exception(str(result.error))
-            logger.info(f"Uploaded {submission_id}.tar to Supabase (main={chosen_main})")
+            logger.info(
+                f"Uploaded {submission_id}.tar to Supabase (main={chosen_main})",
+                extra={
+                    "submission_id": submission_id,
+                    "env_id": env_id,
+                    "algorithm": algorithm,
+                    "user_id": user_id,
+                    "client_id": client_id,
+                },
+            )
             SUBMISSIONS_RECEIVED_TOTAL.labels(mode="multi").inc()
             SUBMISSIONS_UPLOAD_BYTES_TOTAL.inc(total_bytes)
         except Exception as e:
-            logger.error(f"Failed to upload tar to Supabase {submission_id}: {str(e)}")
+            logger.error(
+                f"Failed to upload tar to Supabase {submission_id}: {str(e)}",
+                extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm},
+            )
             raise HTTPException(500, "Failed to save submission bundle")
 
     # Legacy single-file path
     else:
         if not file.filename.endswith(".py"):
-            logger.warning(f"Invalid file type submitted: {file.filename}")
+            logger.warning(
+                f"Invalid file type submitted: {file.filename}",
+                extra={"client_id": client_id},
+            )
             SUBMISSIONS_VALIDATION_FAILURES_TOTAL.labels(reason="not_py").inc()
             raise HTTPException(400, "Only Python scripts allowed")
         try:
@@ -152,14 +171,26 @@ async def submit_rl_script(
             )
             if hasattr(result, 'error') and result.error:
                 raise Exception(str(result.error))
-            logger.info(f"Uploaded {submission_id}.py to Supabase")
+            logger.info(
+                f"Uploaded {submission_id}.py to Supabase",
+                extra={
+                    "submission_id": submission_id,
+                    "env_id": env_id,
+                    "algorithm": algorithm,
+                    "user_id": user_id,
+                    "client_id": client_id,
+                },
+            )
             SUBMISSIONS_RECEIVED_TOTAL.labels(mode="single").inc()
             try:
                 SUBMISSIONS_UPLOAD_BYTES_TOTAL.inc(len(content) if content is not None else 0)
             except Exception:
                 pass
         except Exception as e:
-            logger.error(f"Failed to upload to Supabase {submission_id}: {str(e)}")
+            logger.error(
+                f"Failed to upload to Supabase {submission_id}: {str(e)}",
+                extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm},
+            )
             raise HTTPException(500, "Failed to save submission")
 
     # Create DB record
@@ -175,11 +206,22 @@ async def submit_rl_script(
         db.commit()
         db.refresh(submission)
     except Exception as e:
-        logger.error(f"Database error creating submission {submission_id}: {str(e)}")
+        logger.error(
+            f"Database error creating submission {submission_id}: {str(e)}",
+            extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm},
+        )
         raise HTTPException(500, "Failed to create submission record")
 
     # Queue async evaluation
-    logger.info(f"Queuing evaluation for submission {submission_id}")
+    logger.info(
+        f"Queuing evaluation for submission {submission_id}",
+        extra={
+            "submission_id": submission_id,
+            "env_id": env_id,
+            "algorithm": algorithm,
+            "user_id": user_id,
+        },
+    )
     evaluate_submission_task.delay(submission_id)
 
     return {
@@ -193,7 +235,10 @@ async def submit_rl_script(
 def get_evaluation_results(submission_id: str, db: Session = Depends(get_db)):
     submission = db.query(Submission).get(submission_id)
     if not submission:
-        logger.warning(f"Submission not found: {submission_id}")
+        logger.warning(
+            f"Submission not found: {submission_id}",
+            extra={"submission_id": submission_id},
+        )
         raise HTTPException(404, "Submission not found")
     
     return {

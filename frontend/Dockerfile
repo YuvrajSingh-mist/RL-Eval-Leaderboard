@@ -18,3 +18,6 @@ USER appuser
 # Expose port
 EXPOSE 7860
 
+# Default command for platforms like Render/Heroku that expect a web process
+CMD ["python", "/home/appuser/frontend/gradio_app.py"]
+

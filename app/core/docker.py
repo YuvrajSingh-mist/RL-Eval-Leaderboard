@@ -118,7 +118,14 @@ def run_evaluation_container(submission_id: str, env_id: str):
         if not env_id or not str(env_id).strip():
             raise ValueError("ENV_ID is required to run the evaluator container")
         client = get_docker_client()
-        logger.info(f"Starting evaluation container for submission {submission_id}")
+        logger.info(
+            f"Starting evaluation container for submission {submission_id}",
+            extra={
+                "submission_id": submission_id,
+                "env_id": env_id,
+                "stage": stage,
+            },
+        )
         
         # Create container name
         
@@ -139,7 +146,10 @@ def run_evaluation_container(submission_id: str, env_id: str):
             "SCRIPT_PATH": "/home/appuser/submission.py",
             "SUBMISSION_ID": str(submission_id)
         }
-        logger.info(f"Evaluator env: {{'ENV_ID': '{env_id}', 'SUBMISSION_ID': '{submission_id}'}}")
+        logger.info(
+            f"Evaluator env: {{'ENV_ID': '{env_id}', 'SUBMISSION_ID': '{submission_id}'}}",
+            extra={"submission_id": submission_id, "env_id": env_id, "stage": stage},
+        )
         stage = "create_container"
         container = client.containers.create(
             command = f"/home/appuser/entrypoint.sh",
@@ -158,13 +168,21 @@ def run_evaluation_container(submission_id: str, env_id: str):
             cap_drop=["ALL"],     # Drop all capabilities
             detach=True
         )
-        logger.info(f"Container created: {container.id}")
+        logger.info(
+            f"Container created: {container.id}",
+            extra={
+                "submission_id": submission_id,
+                "env_id": env_id,
+                "container_id": (getattr(container, "id", None) or None),
+                "stage": stage,
+            },
+        )
         # Inject code into container at /home/appuser
         stage = "inject_script"
         if file_kind == 'tar':
             # Assume tar contains files at root, including submission.py
             container.put_archive(path="/home/appuser", data=script_bytes)
-            logger.info("Bundle imported (tar)")
+            logger.info("Bundle imported (tar)", extra={"submission_id": submission_id, "env_id": env_id, "stage": stage})
         else:
             # Single file -> write as submission.py
             tar_stream = io.BytesIO()
@@ -176,11 +194,19 @@ def run_evaluation_container(submission_id: str, env_id: str):
                 tar.addfile(ti, io.BytesIO(script_bytes))
             tar_stream.seek(0)
             container.put_archive(path="/home/appuser", data=tar_stream.getvalue())
-            logger.info("Single script imported")
+            logger.info("Single script imported", extra={"submission_id": submission_id, "env_id": env_id, "stage": stage})
         # Start execution
         stage = "start"
         container.start()
-        logger.info(f"Container started: {container.id}")
+        logger.info(
+            f"Container started: {container.id}",
+            extra={
+                "submission_id": submission_id,
+                "env_id": env_id,
+                "container_id": (getattr(container, "id", None) or None),
+                "stage": stage,
+            },
+        )
 
         # Wait for completion and capture exit code
         stage = "wait"
@@ -194,7 +220,15 @@ def run_evaluation_container(submission_id: str, env_id: str):
         stage = "collect_logs"
         logs = container.logs(stdout=True, stderr=True).decode(errors="replace")
 
-        logger.info(f"Evaluation completed for {submission_id}. Exit code: {exit_code}")
+        logger.info(
+            f"Evaluation completed for {submission_id}. Exit code: {exit_code}",
+            extra={
+                "submission_id": submission_id,
+                "env_id": env_id,
+                "container_id": (getattr(container, "id", None) or None),
+                "stage": stage,
+            },
+        )
         parsed_output = parse_evaluation_output(logs)
         response = {
             "status": exit_code,
@@ -227,7 +261,15 @@ def run_evaluation_container(submission_id: str, env_id: str):
         except Exception:
             logs = ""
         error_msg = f"Container execution failed at stage '{stage}': {str(e)}"
-        logger.exception(error_msg)
+        logger.exception(
+            error_msg,
+            extra={
+                "submission_id": submission_id,
+                "env_id": env_id,
+                "container_id": (getattr(container, "id", None) or None),
+                "stage": stage,
+            },
+        )
         return {"error": error_msg, "stage": stage, "logs": logs[-1000:]}
     
     finally:
@@ -242,5 +284,13 @@ def run_evaluation_container(submission_id: str, env_id: str):
                 pass
         if client:
             client.close()
-        logger.debug(f"Resources cleaned up for submission {submission_id}")
+        logger.debug(
+            f"Resources cleaned up for submission {submission_id}",
+            extra={
+                "submission_id": submission_id,
+                "env_id": env_id,
+                "container_id": (getattr(container, "id", None) or None),
+                "stage": stage,
+            },
+        )
 

@@ -4,6 +4,7 @@ celery[redis]
 sqlalchemy
 psycopg2-binary
 python-dotenv
+gymnasium
 pydantic-settings
 redis
 docker

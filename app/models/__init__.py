@@ -1,2 +1,2 @@
 
-from .submission import Submission, EvaluationMetric, LeaderboardEntry
+from .submission import Submission, LeaderboardEntry

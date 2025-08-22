@@ -1,6 +1,5 @@
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Float, DateTime
 from datetime import datetime
 from app.db.base import Base
 
@@ -15,21 +14,6 @@ class Submission(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="pending")  # pending, processing, completed, failed
     error = Column(String, nullable=True)
-
-    # Relationship to metrics
-    metrics = relationship("EvaluationMetric", back_populates="submission")
-
-class EvaluationMetric(Base):
-    __tablename__ = "metrics"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    submission_id = Column(String, ForeignKey("submissions.id"))
-    episode = Column(Integer)
-    reward = Column(Float)
-    
-    # Relationship to submission
-    submission = relationship("Submission", back_populates="metrics")
-
 
 class LeaderboardEntry(Base):
     __tablename__ = "leaderboard_entries"

@@ -35,12 +35,21 @@ scrape_configs:
             status_code: status_code
             duration_ms: duration_ms
             client: client
+            service: service
+            submission_id: submission_id
+            env_id: env_id
+            algorithm: algorithm
+            task_name: task_name
+            task_id: task_id
+            container_id: container_id
+            stage: stage
       - labels:
           level:
           name:
           method:
           path:
           status_code:
+          service:
           container:
           image:
 

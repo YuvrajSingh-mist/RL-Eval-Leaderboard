@@ -2,7 +2,7 @@
 import logging
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
-from app.models import Submission, EvaluationMetric
+from app.models import Submission
 from app.core.docker import run_evaluation_container
 from app.core.config import settings
 from app.services.leaderboard import redis_leaderboard
@@ -13,8 +13,36 @@ from app.core.metrics import (
     EVALUATION_DURATION_SECONDS,
     DurationTimer,
 )
+from app.core.client import supabase_client
 
 logger = logging.getLogger(__name__)
+
+def _cleanup_submission_artifacts(submission_id: str) -> None:
+    """Best-effort removal of uploaded artifacts from Supabase storage.
+
+    Removes both <id>.tar and <id>.py if present. Errors are logged and ignored.
+    """
+    try:
+        bucket = settings.SUPABASE_BUCKET
+        # Supabase Python client expects a list of paths
+        paths = [f"{submission_id}.tar", f"{submission_id}.py"]
+        try:
+            supabase_client.storage.from_(bucket).remove(paths)
+        except Exception as e:
+            # Some SDK versions return an object with .error; to be tolerant, log and continue
+            logger.info(
+                f"Supabase remove returned error for {submission_id}: {str(e)}",
+                extra={"submission_id": submission_id},
+            )
+        logger.info(
+            f"Cleaned up Supabase artifacts for {submission_id}",
+            extra={"submission_id": submission_id},
+        )
+    except Exception as e:
+        logger.warning(
+            f"Supabase artifact cleanup failed for {submission_id}: {str(e)}",
+            extra={"submission_id": submission_id},
+        )
 
 def evaluate_submission(submission_id: str) -> dict:
     """
@@ -32,7 +60,14 @@ def evaluate_submission(submission_id: str) -> dict:
         # Update status to processing
         submission.status = "processing"
         db.commit()
-        logger.info(f"Started evaluation for submission {submission_id}")
+        logger.info(
+            f"Started evaluation for submission {submission_id}",
+            extra={
+                "submission_id": submission_id,
+                "env_id": submission.env_id,
+                "algorithm": submission.algorithm,
+            },
+        )
         
         # Run in isolated container
         EVALUATION_STARTED_TOTAL.inc()
@@ -51,18 +86,16 @@ def evaluate_submission(submission_id: str) -> dict:
             submission.score = parsed_output["score"]
             submission.status = "completed"
 
-            # Store detailed metrics if available
-            metrics = parsed_output.get("metrics", [])
-            if metrics:
-                for episode, reward in enumerate(metrics):
-                    metric = EvaluationMetric(
-                        submission_id=submission_id,
-                        episode=episode,
-                        reward=reward
-                    )
-                    db.add(metric)
+            # Detailed per-episode metrics removed
 
-            logger.info(f"Evaluation completed for {submission_id}. Score: {submission.score}")
+            logger.info(
+                f"Evaluation completed for {submission_id}. Score: {submission.score}",
+                extra={
+                    "submission_id": submission_id,
+                    "env_id": submission.env_id,
+                    "algorithm": submission.algorithm,
+                },
+            )
             db.commit()
             try:
                 EVALUATION_COMPLETED_TOTAL.labels(env_id=submission.env_id).inc()
@@ -73,7 +106,14 @@ def evaluate_submission(submission_id: str) -> dict:
             try:
                 redis_leaderboard.add_submission(submission)
             except Exception as e:
-                logger.error(f"Failed to update Redis leaderboard for {submission_id}: {str(e)}")
+                logger.error(
+                    f"Failed to update Redis leaderboard for {submission_id}: {str(e)}",
+                    extra={
+                        "submission_id": submission_id,
+                        "env_id": submission.env_id,
+                        "algorithm": submission.algorithm,
+                    },
+                )
             return {"status": "completed", "score": submission.score}
 
         # Evaluation failed
@@ -89,7 +129,14 @@ def evaluate_submission(submission_id: str) -> dict:
 
         submission.status = "failed"
         submission.error = error_msg[:2000]
-        logger.error(f"Evaluation failed for {submission_id}: {error_msg}")
+        logger.error(
+            f"Evaluation failed for {submission_id}: {error_msg}",
+            extra={
+                "submission_id": submission_id,
+                "env_id": submission.env_id if 'submission' in locals() and submission else None,
+                "algorithm": submission.algorithm if 'submission' in locals() and submission else None,
+            },
+        )
 
         # Commit final status
         db.commit()
@@ -103,7 +150,12 @@ def evaluate_submission(submission_id: str) -> dict:
     except Exception as e:
         # Handle unexpected errors
         error_msg = str(e)
-        logger.exception(f"Unexpected error evaluating submission {submission_id}: {str(e)}")
+        logger.exception(
+            f"Unexpected error evaluating submission {submission_id}: {str(e)}",
+            extra={
+                "submission_id": submission_id,
+            },
+        )
         
         if db:
             try:
@@ -113,7 +165,10 @@ def evaluate_submission(submission_id: str) -> dict:
                     submission.error = f"System error: {error_msg[:500]}"
                     db.commit()
             except Exception as db_error:
-                logger.error(f"Failed to update DB after error: {str(db_error)}")
+                logger.error(
+                    f"Failed to update DB after error: {str(db_error)}",
+                    extra={"submission_id": submission_id},
+                )
         
         try:
             EVALUATION_FAILED_TOTAL.labels(reason="unexpected_exception").inc()
@@ -122,4 +177,9 @@ def evaluate_submission(submission_id: str) -> dict:
         return {"status": "error", "message": error_msg}
     
     finally:
+        # Best-effort artifact cleanup regardless of outcome
+        try:
+            _cleanup_submission_artifacts(submission_id)
+        except Exception:
+            pass
         db.close()

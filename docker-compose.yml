@@ -11,6 +11,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - pg_:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     networks:
       - rl-net
 
@@ -46,6 +48,7 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - SUPABASE_BUCKET=${SUPABASE_BUCKET}
+      - SERVICE_NAME=api
       # Sentry removed; logs go to stdout and Promtail ships to Loki
     depends_on:
       - db
@@ -67,7 +70,7 @@ services:
       x-bake:
         # platforms:
         #   - linux/amd64
-    command: celery -A app.core.celery.celery_app worker --loglevel=info
+    command: celery -A app.core.celery.celery_app worker --loglevel=info -P prefork -c 4
     volumes:
       - ./app:/home/appuser/app
       - ./worker:/home/appuser/worker
@@ -84,12 +87,16 @@ services:
       - SUPABASE_BUCKET=${SUPABASE_BUCKET}
       - DOCKER_HOST=unix:///var/run/docker.sock
       - WORKER_METRICS_PORT=9100
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prom_metrics
+      - SERVICE_NAME=worker
     depends_on:
       - api
     networks:
       - rl-net
     privileged: true
     user: root
+    tmpfs:
+      - /tmp/prom_metrics:size=64m
     healthcheck:
       test: ["CMD", "celery", "inspect", "ping", "-A", "app.core.celery"]
       interval: 30s
@@ -174,18 +181,33 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     env_file: .env
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./scripts/grafana_user_provision.sh:/docker-entrypoint-initgrafana.d/10-create-user.sh:ro
     depends_on:
       - prometheus
       - loki
     networks:
       - rl-net
+
+  grafana-init:
+    image: curlimages/curl:8.5.0
+    command: sh /init/10-create-user.sh
+    env_file: .env
+    environment:
+      - GRAFANA_URL=http://grafana:3000
+    volumes:
+      - ./scripts/grafana_user_provision.sh:/init/10-create-user.sh:ro
+    depends_on:
+      - grafana
+    networks:
+      - rl-net
+    restart: "no"
   alertmanager:
     image: prom/alertmanager:latest
     command:

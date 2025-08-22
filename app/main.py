@@ -1,6 +1,7 @@
 
 from fastapi import FastAPI
 from fastapi import Request
+from fastapi.middleware.cors import CORSMiddleware
 from app.api import submissions, leaderboard
 from app.db.session import init_db
 from app.core.config import settings
@@ -14,7 +15,7 @@ import os
 setup_logging()
 
 app = FastAPI(
-    title="RL Leaderboard",
+    title="SimpleRL Leaderboard",
     description="API for evaluating and ranking RL agents",
     version="1.0.0"
 )
@@ -27,6 +28,17 @@ try:
     init_fastapi_instrumentation(app)
 except Exception as _e:
     logging.getLogger(__name__).error(f"Prometheus metrics init failed: {_e}")
+
+# CORS for cross-origin frontend (e.g., Render-hosted Gradio)
+_cors_origins_env = os.getenv("CORS_ORIGINS", "*")
+_cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if "*" in _cors_origins else _cors_origins,
+    allow_credentials=False if "*" in _cors_origins else True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Initialize database, Redis, and metrics

@@ -181,6 +181,7 @@ class RedisLeaderboard:
         env_id: str,
         limit: int = 50,
         id_query: str | None = None,
+        user: str | None = None,
         algorithm: str | None = None,
         score_min: float | None = None,
         score_max: float | None = None,
@@ -216,6 +217,8 @@ class RedisLeaderboard:
                     # Apply filters
                     if id_query:
                         q = q.filter(LeaderboardEntry.id.ilike(f"%{id_query}%"))
+                    if user:
+                        q = q.filter(LeaderboardEntry.user_id.ilike(f"%{user}%"))
                     if algorithm:
                         q = q.filter(LeaderboardEntry.algorithm.ilike(f"%{algorithm}%"))
                     if score_min is not None:
@@ -302,6 +305,9 @@ class RedisLeaderboard:
             if id_query:
                 iq = id_query.lower()
                 entries = [e for e in entries if iq in (e['id'] or '').lower()]
+            if user:
+                uq = user.lower()
+                entries = [e for e in entries if uq in (e['user_id'] or '').lower()]
             if algorithm:
                 aq = algorithm.lower()
                 entries = [e for e in entries if aq in (e['algorithm'] or '').lower()]
