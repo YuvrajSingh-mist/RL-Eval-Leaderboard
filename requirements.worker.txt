@@ -8,3 +8,6 @@ docker
 requests
 supabase
 
+# Observability
+prometheus-client
+python-json-logger

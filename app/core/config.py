@@ -1,35 +1,37 @@
 import os
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     # Database configuration
-    DATABASE_URL: str = "postgresql://leaderboard:securepassword123@db:5432/leaderboard"
-    
+    # Use env-provided DATABASE_URL. No hardcoded credentials.
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
     # Redis configuration
-    REDIS_URL: str = "redis://redis:6379/0"
-    
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
     # Celery configuration
-    CELERY_BROKER_URL: str = "redis://redis:6379/1"
-    CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
-    
-    # Supabase configuration
-    SUPABASE_URL: str = "https://ugruhveupflxhdfgkbvu.supabase.co"
-    SUPABASE_ANON_KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVncnVodmV1cGZseGhkZmdrYnZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MDM3NDAsImV4cCI6MjA3MTI3OTc0MH0.d5hEy8nRnX0fv8fKj7xQPupLqrJVh2PKsjE41u62LZA"
-    SUPABASE_SERVICE_KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVncnVodmV1cGZseGhkZmdrYnZ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NTcwMzc0MCwiZXhwIjoyMDcxMjc5NzQwfQ.5UrsR8z9n0etAzr1SkHp5eRZFTcsE5NH0SxYMT0OhfQ"
-    SUPABASE_BUCKET: str = "submissions"
-    SUPABASE_PASSWORD: str = "omsairam786%"
-    
-    # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "supersecret")
+    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/1")
+    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1")
+
+    # Supabase configuration (all from env)
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
+    SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+    SUPABASE_BUCKET: str = os.getenv("SUPABASE_BUCKET", "submissions")
+
+    # Security (removed SECRET_KEY; not used)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Docker socket configuration
-    DOCKER_SOCKET: str = "unix:///var/run/docker.sock"
+    DOCKER_SOCKET: str = os.getenv("DOCKER_SOCKET", "unix:///var/run/docker.sock")
 
     # Evaluator image
-    EVALUATOR_IMAGE: str = "rl-evaluator:latest"
+    EVALUATOR_IMAGE: str = os.getenv("EVALUATOR_IMAGE", "rl-evaluator:latest")
 
     class Config:
+        # Let BaseSettings read from project .env if present (local dev).
         env_file = ".env"
+
 
 settings = Settings()

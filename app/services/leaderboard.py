@@ -2,7 +2,7 @@
 import logging
 import json
 import redis
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.core.config import settings
 from app.models import Submission, LeaderboardEntry
 from app.db.session import SessionLocal
@@ -176,24 +176,77 @@ class RedisLeaderboard:
         except Exception as e:
             logger.error(f"Failed to add submission {submission.id} to leaderboard: {str(e)}")
     
-    def get_leaderboard(self, env_id: str, limit: int = 50):
-        """Get leaderboard sorted by score (highest first)"""
+    def get_leaderboard(
+        self,
+        env_id: str,
+        limit: int = 50,
+        id_query: str | None = None,
+        algorithm: str | None = None,
+        score_min: float | None = None,
+        score_max: float | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        sort: str = "score_desc",
+    ):
+        """Get leaderboard with filters and sorting.
+
+        Sort options:
+        - score_desc: score desc, tie-break by created_at asc (earlier first)
+        - date_desc: created_at desc (newest), tie-break by score desc
+        - date_asc: created_at asc (oldest), tie-break by score desc
+        """
         if not self.redis_client:
             self.connect()
             
         try:
             leaderboard_key = self.leaderboard_key.format(env_id=env_id)
             
-            # Get top N submissions by score (descending)
+            # Fetch more than requested to allow filters to reduce results
+            fetch_count = min(max(limit * 5, 200), 2000)
             submission_ids = self.redis_client.zrevrange(
-                leaderboard_key, 0, limit-1, withscores=True
+                leaderboard_key, 0, fetch_count - 1, withscores=True
             )
             
             if not submission_ids:
                 # Fallback to DB if Redis empty
                 try:
                     db = SessionLocal()
-                    rows = db.query(LeaderboardEntry).filter(LeaderboardEntry.env_id == env_id).order_by(LeaderboardEntry.score.desc(), LeaderboardEntry.created_at.asc()).limit(limit).all()
+                    q = db.query(LeaderboardEntry).filter(LeaderboardEntry.env_id == env_id)
+
+                    # Apply filters
+                    if id_query:
+                        q = q.filter(LeaderboardEntry.id.ilike(f"%{id_query}%"))
+                    if algorithm:
+                        q = q.filter(LeaderboardEntry.algorithm.ilike(f"%{algorithm}%"))
+                    if score_min is not None:
+                        q = q.filter(LeaderboardEntry.score >= float(score_min))
+                    if score_max is not None:
+                        q = q.filter(LeaderboardEntry.score <= float(score_max))
+
+                    # Dates (inclusive)
+                    if date_from:
+                        try:
+                            df = datetime.strptime(date_from, "%Y-%m-%d")
+                            q = q.filter(LeaderboardEntry.created_at >= df)
+                        except Exception:
+                            pass
+                    if date_to:
+                        try:
+                            dt = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1) - timedelta(microseconds=1)
+                            q = q.filter(LeaderboardEntry.created_at <= dt)
+                        except Exception:
+                            pass
+
+                    # Sorting
+                    s = (sort or "score_desc").lower()
+                    if s == "date_desc":
+                        q = q.order_by(LeaderboardEntry.created_at.desc(), LeaderboardEntry.score.desc(), LeaderboardEntry.id.asc())
+                    elif s == "date_asc":
+                        q = q.order_by(LeaderboardEntry.created_at.asc(), LeaderboardEntry.score.desc(), LeaderboardEntry.id.asc())
+                    else:  # score_desc
+                        q = q.order_by(LeaderboardEntry.score.desc(), LeaderboardEntry.created_at.asc(), LeaderboardEntry.id.asc())
+
+                    rows = q.limit(limit).all()
                     return [
                         {
                             'rank': i + 1,
@@ -202,7 +255,7 @@ class RedisLeaderboard:
                             'algorithm': row.algorithm,
                             'score': float(row.score),
                             'created_at': row.created_at.isoformat(),
-                            'env_id': row.env_id
+                            'env_id': row.env_id,
                         }
                         for i, row in enumerate(rows)
                     ]
@@ -215,8 +268,9 @@ class RedisLeaderboard:
                     except Exception:
                         pass
                 
-            leaderboard = []
-            for i, (submission_id_bytes, score) in enumerate(submission_ids):
+            # Redis path: collect entries and filter/sort in-memory
+            entries = []
+            for submission_id_bytes, score in submission_ids:
                 submission_id = submission_id_bytes.decode('utf-8')
                 submission_key = self.submission_key.format(submission_id=submission_id)
                 
@@ -225,17 +279,93 @@ class RedisLeaderboard:
                 if data:
                     # Convert bytes to strings
                     data = {k.decode('utf-8'): v.decode('utf-8') for k, v in data.items()}
-                    leaderboard.append({
-                        'rank': i + 1,
+                    # Parse created_at
+                    created_at_raw = data.get('created_at')
+                    try:
+                        created_dt = datetime.fromisoformat(created_at_raw)
+                    except Exception:
+                        created_dt = None
+                    try:
+                        score_val = float(data['score']) if data.get('score') is not None else None
+                    except Exception:
+                        score_val = None
+                    entries.append({
                         'id': submission_id,
                         'user_id': data.get('user_id', 'Unknown'),
                         'algorithm': data.get('algorithm', 'Unknown'),
-                        'score': float(data['score']),
-                        'created_at': data['created_at'],
-                        'env_id': data['env_id']
+                        'score': score_val,
+                        'created_at': created_dt,
+                        'env_id': data.get('env_id'),
                     })
             
-            return leaderboard
+            # Apply filters
+            if id_query:
+                iq = id_query.lower()
+                entries = [e for e in entries if iq in (e['id'] or '').lower()]
+            if algorithm:
+                aq = algorithm.lower()
+                entries = [e for e in entries if aq in (e['algorithm'] or '').lower()]
+            if score_min is not None:
+                try:
+                    smin = float(score_min)
+                    entries = [e for e in entries if (e['score'] is not None and e['score'] >= smin)]
+                except Exception:
+                    pass
+            if score_max is not None:
+                try:
+                    smax = float(score_max)
+                    entries = [e for e in entries if (e['score'] is not None and e['score'] <= smax)]
+                except Exception:
+                    pass
+            if date_from:
+                try:
+                    df = datetime.strptime(date_from, "%Y-%m-%d")
+                    entries = [e for e in entries if (e['created_at'] is not None and e['created_at'] >= df)]
+                except Exception:
+                    pass
+            if date_to:
+                try:
+                    dt_to_val = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1) - timedelta(microseconds=1)
+                    entries = [e for e in entries if (e['created_at'] is not None and e['created_at'] <= dt_to_val)]
+                except Exception:
+                    pass
+
+            # Sorting
+            s = (sort or 'score_desc').lower()
+            if s == 'date_desc':
+                entries.sort(key=lambda e: (
+                    -(e['created_at'].timestamp() if e['created_at'] else float('-inf')),
+                    -(e['score'] if e['score'] is not None else float('-inf')),
+                    str(e['id'])
+                ))
+            elif s == 'date_asc':
+                entries.sort(key=lambda e: (
+                    (e['created_at'].timestamp() if e['created_at'] else float('inf')),
+                    -(e['score'] if e['score'] is not None else float('-inf')),
+                    str(e['id'])
+                ))
+            else:  # score_desc
+                entries.sort(key=lambda e: (
+                    -(e['score'] if e['score'] is not None else float('-inf')),
+                    (e['created_at'] or datetime.min),
+                    str(e['id'])
+                ))
+
+            # Cap to limit and build response
+            pruned = entries[:limit]
+            result = []
+            for i, e in enumerate(pruned):
+                created_str = e['created_at'].isoformat() if e['created_at'] else None
+                result.append({
+                    'rank': i + 1,
+                    'id': e['id'],
+                    'user_id': e['user_id'],
+                    'algorithm': e['algorithm'],
+                    'score': float(e['score']) if e['score'] is not None else None,
+                    'created_at': created_str,
+                    'env_id': e['env_id'],
+                })
+            return result
             
         except Exception as e:
             logger.error(f"Failed to get leaderboard for {env_id}: {str(e)}")

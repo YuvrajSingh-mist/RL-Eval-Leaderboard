@@ -10,3 +10,8 @@ redis
 docker
 requests
 supabase
+
+# Observability
+prometheus-client
+prometheus-fastapi-instrumentator
+python-json-logger

@@ -6,6 +6,13 @@ from app.models import Submission, EvaluationMetric
 from app.core.docker import run_evaluation_container
 from app.core.config import settings
 from app.services.leaderboard import redis_leaderboard
+from app.core.metrics import (
+    EVALUATION_STARTED_TOTAL,
+    EVALUATION_COMPLETED_TOTAL,
+    EVALUATION_FAILED_TOTAL,
+    EVALUATION_DURATION_SECONDS,
+    DurationTimer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +35,12 @@ def evaluate_submission(submission_id: str) -> dict:
         logger.info(f"Started evaluation for submission {submission_id}")
         
         # Run in isolated container
-        result = run_evaluation_container(
-            submission_id=submission_id,
-            env_id=submission.env_id
-        )
+        EVALUATION_STARTED_TOTAL.inc()
+        with DurationTimer() as timer:
+            result = run_evaluation_container(
+                submission_id=submission_id,
+                env_id=submission.env_id
+            )
         
         # Process results
         parsed_output = result.get("output", {}) if isinstance(result, dict) else {}
@@ -55,6 +64,11 @@ def evaluate_submission(submission_id: str) -> dict:
 
             logger.info(f"Evaluation completed for {submission_id}. Score: {submission.score}")
             db.commit()
+            try:
+                EVALUATION_COMPLETED_TOTAL.labels(env_id=submission.env_id).inc()
+                EVALUATION_DURATION_SECONDS.labels(env_id=submission.env_id).observe(timer.seconds)
+            except Exception:
+                pass
             # Push to Redis leaderboard for immediate visibility
             try:
                 redis_leaderboard.add_submission(submission)
@@ -79,6 +93,11 @@ def evaluate_submission(submission_id: str) -> dict:
 
         # Commit final status
         db.commit()
+        try:
+            EVALUATION_FAILED_TOTAL.labels(reason="script_error").inc()
+            EVALUATION_DURATION_SECONDS.labels(env_id=submission.env_id).observe(timer.seconds)
+        except Exception:
+            pass
         return {"status": "failed", "error": error_msg}
     
     except Exception as e:
@@ -96,6 +115,10 @@ def evaluate_submission(submission_id: str) -> dict:
             except Exception as db_error:
                 logger.error(f"Failed to update DB after error: {str(db_error)}")
         
+        try:
+            EVALUATION_FAILED_TOTAL.labels(reason="unexpected_exception").inc()
+        except Exception:
+            pass
         return {"status": "error", "message": error_msg}
     
     finally:

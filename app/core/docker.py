@@ -84,14 +84,28 @@ def get_docker_client():
         logger.critical(f"Docker client initialization failed: {str(e)}")
         raise
 
-def _download_submission_bytes(submission_id: str) -> bytes:
-    """Download the submission file from Supabase as raw bytes."""
-    response = supabase_client.storage.from_(settings.SUPABASE_BUCKET).download(f"{submission_id}.py")
-    if hasattr(response, 'error') and response.error:
-        raise Exception(f"Download failed: {response.error}")
-    if not isinstance(response, (bytes, bytearray)):
+def _download_submission_bytes(submission_id: str):
+    """Download submission from Supabase.
+
+    Returns a tuple of (bytes, kind) where kind is 'tar' or 'py'. Prefers tar bundles.
+    """
+    # Try tar bundle first
+    try:
+        tar_resp = supabase_client.storage.from_(settings.SUPABASE_BUCKET).download(f"{submission_id}.tar")
+        if isinstance(tar_resp, (bytes, bytearray)):
+            return bytes(tar_resp), 'tar'
+        if hasattr(tar_resp, 'error') and tar_resp.error:
+            logger.debug(f"No tar found for {submission_id}: {tar_resp.error}")
+    except Exception as e:
+        logger.debug(f"Tar download failed for {submission_id}: {str(e)}")
+
+    # Fallback to single .py
+    py_resp = supabase_client.storage.from_(settings.SUPABASE_BUCKET).download(f"{submission_id}.py")
+    if hasattr(py_resp, 'error') and py_resp.error:
+        raise Exception(f"Download failed: {py_resp.error}")
+    if not isinstance(py_resp, (bytes, bytearray)):
         raise Exception("Unexpected response downloading submission")
-    return bytes(response)
+    return bytes(py_resp), 'py'
 
 def run_evaluation_container(submission_id: str, env_id: str):
     """Run evaluation in a secure Docker container"""
@@ -117,7 +131,7 @@ def run_evaluation_container(submission_id: str, env_id: str):
         
         # Download script content into memory
         stage = "download_submission"
-        script_bytes = _download_submission_bytes(submission_id)
+        script_bytes, file_kind = _download_submission_bytes(submission_id)
 
         # Prepare env and create container (do not start yet)
         env_vars = {
@@ -145,18 +159,24 @@ def run_evaluation_container(submission_id: str, env_id: str):
             detach=True
         )
         logger.info(f"Container created: {container.id}")
-        # Inject submission.py inside container at /home/appuser
+        # Inject code into container at /home/appuser
         stage = "inject_script"
-        tar_stream = io.BytesIO()
-        with tarfile.open(fileobj=tar_stream, mode='w') as tar:
-            ti = tarfile.TarInfo(name="submission.py")
-            ti.size = len(script_bytes)
-            ti.mtime = int(time.time())
-            ti.mode = 0o444
-            tar.addfile(ti, io.BytesIO(script_bytes))
-        tar_stream.seek(0)
-        container.put_archive(path="/home/appuser", data=tar_stream.getvalue())
-        logger.info(f"File imported")
+        if file_kind == 'tar':
+            # Assume tar contains files at root, including submission.py
+            container.put_archive(path="/home/appuser", data=script_bytes)
+            logger.info("Bundle imported (tar)")
+        else:
+            # Single file -> write as submission.py
+            tar_stream = io.BytesIO()
+            with tarfile.open(fileobj=tar_stream, mode='w') as tar:
+                ti = tarfile.TarInfo(name="submission.py")
+                ti.size = len(script_bytes)
+                ti.mtime = int(time.time())
+                ti.mode = 0o444
+                tar.addfile(ti, io.BytesIO(script_bytes))
+            tar_stream.seek(0)
+            container.put_archive(path="/home/appuser", data=tar_stream.getvalue())
+            logger.info("Single script imported")
         # Start execution
         stage = "start"
         container.start()

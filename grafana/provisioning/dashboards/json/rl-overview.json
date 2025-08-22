@@ -1,0 +1,142 @@
+{
+  "id": null,
+  "uid": "rl-overview",
+  "title": "RL Leaderboard Overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Submissions Received",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "sum(submissions_received_total)"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Evaluations Completed",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "sum(increase(evaluation_completed_total[$__range])) or vector(0)"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Evaluations Failed",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "sum(increase(evaluation_failed_total[$__range])) or vector(0)"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Evaluation Duration (p95)",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(evaluation_duration_seconds_bucket[$__interval])) by (le, env_id))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Leaderboard Query Duration",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "(sum(rate(leaderboard_query_duration_seconds_sum[$__interval])) / sum(rate(leaderboard_query_duration_seconds_count[$__interval]))) or 0"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Submissions by Mode (rate)",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (mode) (increase(submissions_received_total[$__interval]))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Validation Failures by Reason (rate)",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (reason) (increase(submissions_validation_failures_total[$__interval]))"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Upload Bytes (last $__range)",
+      "gridPos": {"x": 0, "y": 20, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "sum(increase(submissions_upload_bytes_total[$__range]))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Evaluations Started/Completed/Failed (rate)",
+      "gridPos": {"x": 6, "y": 20, "w": 18, "h": 8},
+      "targets": [
+        {"expr": "sum(increase(evaluation_started_total[$__interval]))", "legendFormat": "started"},
+        {"expr": "sum(increase(evaluation_completed_total[$__interval]))", "legendFormat": "completed"},
+        {"expr": "sum(increase(evaluation_failed_total[$__interval]))", "legendFormat": "failed"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Evaluation Duration (p99)",
+      "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.99, sum(rate(evaluation_duration_seconds_bucket[$__interval])) by (le, env_id))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Leaderboard Queries (rate)",
+      "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (env_id, sort) (increase(leaderboard_queries_total[$__interval]))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Celery Queue Length",
+      "gridPos": {"x": 0, "y": 36, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "max by (queue_name) (celery_queue_length)"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "API RPS by Status",
+      "gridPos": {"x": 12, "y": 36, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (status_code) (rate(http_requests_total[$__interval]))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "API Latency p95",
+      "gridPos": {"x": 0, "y": 44, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[$__interval])) by (le))"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Redis Memory Used",
+      "gridPos": {"x": 12, "y": 44, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "max(redis_memory_used_bytes)"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Redis Connected Clients",
+      "gridPos": {"x": 18, "y": 44, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "max(redis_connected_clients)"}
+      ]
+    }
+  ]
+}
+

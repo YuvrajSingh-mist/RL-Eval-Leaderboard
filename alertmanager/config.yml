@@ -1,0 +1,12 @@
+route:
+  receiver: default
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: 'http://frontend:7860'  # placeholder; change to your webhook/slack/email gateway
+
