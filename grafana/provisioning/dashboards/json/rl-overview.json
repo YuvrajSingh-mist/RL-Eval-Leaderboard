@@ -144,6 +144,28 @@
       "targets": [
         {"expr": "max(redis_connected_clients)"}
       ]
+    },
+    {
+      "type": "stat",
+      "title": "Unique Visitors (API) - last $__range",
+      "gridPos": {"x": 0, "y": 64, "w": 12, "h": 8},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center"},
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "count(count_over_time({service=\"api\"} |= \"request_completed\" [$__range]) by (client))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Total API Requests (last $__range)",
+      "gridPos": {"x": 12, "y": 64, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "targets": [
+        {"expr": "sum(increase(http_requests_total[$__range]))", "refId": "A"}
+      ]
     }
   ]
 }

@@ -52,4 +52,5 @@ scrape_configs:
           service:
           container:
           image:
+          client:
 
