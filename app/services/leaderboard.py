@@ -201,18 +201,28 @@ class RedisLeaderboard:
             
         try:
             leaderboard_key = self.leaderboard_key.format(env_id=env_id)
-            # Determine global top 3 medal mapping (independent of filters/sort)
+            # Determine global top 3 medal mapping among non-zero scores (independent of filters/sort)
             top3_medal_map: dict[str, str] = {}
             try:
-                top3_ids_raw = self.redis_client.zrevrange(leaderboard_key, 0, 2)
-                top3_ids = [i.decode('utf-8') for i in top3_ids_raw] if top3_ids_raw else []
-                for idx, sid in enumerate(top3_ids):
-                    if idx == 0:
+                # Traverse all scores from highest to lowest and pick first 3 with non-zero score
+                candidates = self.redis_client.zrevrange(leaderboard_key, 0, -1, withscores=True)
+                rank_idx = 0
+                for sid_bytes, score in (candidates or []):
+                    try:
+                        sc = float(score)
+                    except Exception:
+                        sc = None
+                    if sc is None or sc == 0.0:
+                        continue
+                    sid = sid_bytes.decode('utf-8')
+                    if rank_idx == 0:
                         top3_medal_map[sid] = 'gold'
-                    elif idx == 1:
+                    elif rank_idx == 1:
                         top3_medal_map[sid] = 'silver'
-                    elif idx == 2:
+                    elif rank_idx == 2:
                         top3_medal_map[sid] = 'bronze'
+                        break
+                    rank_idx += 1
             except Exception:
                 top3_medal_map = {}
             
@@ -228,9 +238,12 @@ class RedisLeaderboard:
                     db = SessionLocal()
                     # Compute top3 for medals via DB (global top 3 by score for env)
                     try:
+                        # Pick top 3 with non-zero score
                         top3_rows = (
                             db.query(LeaderboardEntry)
                             .filter(LeaderboardEntry.env_id == env_id)
+                            .filter(LeaderboardEntry.score.isnot(None))
+                            .filter(LeaderboardEntry.score != 0)
                             .order_by(LeaderboardEntry.score.desc(), LeaderboardEntry.created_at.asc(), LeaderboardEntry.id.asc())
                             .limit(3)
                             .all()
