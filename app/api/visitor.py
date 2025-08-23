@@ -3,8 +3,33 @@ from app.core.config import settings
 import time
 import jwt
 import uuid
+import datetime as dt
+import redis
+from prometheus_client import Gauge
 
 router = APIRouter()
+
+# Redis client for visitor metrics (DB 0)
+_r = None
+def _redis():
+    global _r
+    if _r is None:
+        _r = redis.from_url(settings.REDIS_URL, socket_timeout=5, retry_on_timeout=True)
+    return _r
+
+# Prometheus gauges for uniques (single-process safe)
+UNIQUE_VISITORS_TODAY = Gauge("unique_visitors_today", "Approx unique visitors today (JWT)")
+UNIQUE_VISITORS_7D = Gauge("unique_visitors_7d", "Approx unique visitors over last 7 days (JWT)")
+UNIQUE_VISITORS_ALLTIME = Gauge("unique_visitors_alltime", "All-time unique visitors (JWT)")
+UNIQUE_VISITORS_MONTH = Gauge("unique_visitors_month", "Unique visitors by month (JWT)", labelnames=("month",))
+
+def _hll_key(d: dt.date) -> str:
+    return f"hll:visitors:{d.isoformat()}"
+
+def _hll_month_key(d: dt.date) -> str:
+    return f"hll:visitors:month:{d.strftime('%Y-%m')}"
+
+_HLL_ALLTIME_KEY = "hll:visitors:alltime"
 
 
 def _issue_visitor_token(sub: str | None = None) -> str:
@@ -73,6 +98,16 @@ def visitor_pixel(request: Request):
         except Exception:
             vid = None
 
+    # Count unique visitors via Redis HyperLogLog per day
+    try:
+        if vid:
+            today = dt.date.today()
+            _redis().pfadd(_hll_key(today), vid)
+            _redis().pfadd(_hll_month_key(today), vid)
+            _redis().pfadd(_HLL_ALLTIME_KEY, vid)
+    except Exception:
+        pass
+
     # Minimal logging via application logger
     import logging
     logging.getLogger("visitor").info("visitor_pixel", extra={"visitor_id": vid})
@@ -90,4 +125,37 @@ def visitor_pixel_head():
     # Allow HEAD requests to succeed for monitoring and curl -I
     return Response(status_code=200)
 
+
+
+def refresh_unique_visitor_metrics() -> None:
+    """Compute and set Prometheus gauges for uniques today and rolling 7d."""
+    try:
+        today = dt.date.today()
+        keys7 = [_hll_key(today - dt.timedelta(days=i)) for i in range(7)]
+        UNIQUE_VISITORS_TODAY.set(float(_redis().pfcount(_hll_key(today))))
+        UNIQUE_VISITORS_7D.set(float(_redis().pfcount(*keys7)))
+
+        # All-time
+        try:
+            UNIQUE_VISITORS_ALLTIME.set(float(_redis().pfcount(_HLL_ALLTIME_KEY)))
+        except Exception:
+            pass
+
+        # Per-month for last 13 months (current + 12 back)
+        for i in range(13):
+            d = (today.replace(day=1) - dt.timedelta(days=1)) if i == 1 and today.day == 1 else None
+        # Simpler: iterate months by stepping back month-by-month
+        m = today.replace(day=1)
+        for _ in range(13):
+            key = _hll_month_key(m)
+            try:
+                val = float(_redis().pfcount(key))
+                UNIQUE_VISITORS_MONTH.labels(month=m.strftime('%Y-%m')).set(val)
+            except Exception:
+                pass
+            # Step back one month
+            m = (m - dt.timedelta(days=1)).replace(day=1)
+    except Exception:
+        # do not raise; metrics are best-effort
+        pass
 

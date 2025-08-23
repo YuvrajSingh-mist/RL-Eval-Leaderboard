@@ -159,16 +159,17 @@
       "type": "graph",
       "title": "Monthly Unique Visitors (JWT)",
       "gridPos": {"x": 0, "y": 72, "w": 12, "h": 8},
-      "bars": true,
-      "lines": false,
+      "bars": false,
+      "lines": true,
+      "points": true,
       "timeFrom": "365d",
       "maxDataPoints": 13,
       "targets": [
         {
-          "datasource": "Loki",
-          "expr": "count(sum by (visitor_id) (count_over_time({service=\"api\", visitor_id=~\".+\"} |= \"request_completed\" [30d])))",
+          "datasource": "Prometheus",
+          "expr": "sum by (month) (unique_visitors_month)",
           "refId": "A",
-          "interval": "30d"
+          "legendFormat": "{{month}}"
         }
       ]
     },
@@ -190,17 +191,15 @@
       ]
     },
     {
-      "type": "stat",
+      "type": "graph",
       "title": "All-time Unique Visitors",
       "gridPos": {"x": 0, "y": 80, "w": 12, "h": 8},
-      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center"},
+      "bars": false,
+      "lines": true,
+      "points": true,
       "timeFrom": "365d",
       "targets": [
-        {
-          "datasource": "Loki",
-          "expr": "count(sum by (visitor_id) (count_over_time({service=\"api\", visitor_id=~\".+\"} |= \"request_completed\" [$__range])))",
-          "refId": "A"
-        }
+        {"datasource": "Prometheus", "expr": "max(unique_visitors_alltime)", "refId": "A"}
       ]
     }
   ]

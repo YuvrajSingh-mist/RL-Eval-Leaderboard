@@ -12,6 +12,7 @@ from app.core.metrics import init_fastapi_instrumentation
 from app.core.logging_config import setup_logging
 import logging
 import os
+import asyncio
 
 # Configure logging (JSON)
 setup_logging()
@@ -69,6 +70,19 @@ def startup_event():
     except Exception as e:
         logger.error(f"Failed to connect to Redis: {str(e)}")
         logger.info("Will use database fallback for leaderboard")
+
+    # Start background task to refresh unique visitor gauges
+    try:
+        async def _refresh_loop():
+            while True:
+                try:
+                    visitor.refresh_unique_visitor_metrics()
+                except Exception:
+                    pass
+                await asyncio.sleep(30)
+        asyncio.create_task(_refresh_loop())
+    except Exception:
+        pass
 
 
 @app.middleware("http")
