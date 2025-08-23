@@ -69,24 +69,23 @@ cd RL\ Leaderboard
 ### Environment
 Create a `.env` file at the repo root (values are examples; use your own secrets):
 ```env
-# Database used by docker-compose
-DB_USER=leaderboard
-DB_PASSWORD=change-me-strong
-
 # FastAPI app security
 SECRET_KEY=please-change-this
 
-# Supabase (required for uploads/downloads)
-SUPABASE_URL=https://your-project-id.supabase.co
+# Supabase (required for uploads/downloads and DB)
+SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_ANON_KEY=your-public-anon-key
 SUPABASE_SERVICE_KEY=your-service-role-key
 SUPABASE_BUCKET=submissions
 
-# Optional: override (compose provides sane defaults)
-# DATABASE_URL=postgresql://leaderboard:change-me-strong@db:5432/leaderboard
-# REDIS_URL=redis://redis:6379/0
-# CELERY_BROKER_URL=redis://redis:6379/1
-# CELERY_RESULT_BACKEND=redis://redis:6379/1
+# Supabase Postgres (use Connection Pooling host and encoded password)
+# Example with pooling (replace region and project-ref):
+# DATABASE_URL=postgresql://postgres:<encoded_password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require&options=project%3D<project-ref>
+
+# Redis
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/1
+CELERY_RESULT_BACKEND=redis://redis:6379/1
 ```
 
 In Supabase, create a Storage bucket named `submissions`. The backend uses the service role key to upload and download submission files.
@@ -124,9 +123,7 @@ These are consumed by the services (see `docker-compose.yml` and `app/core/confi
 
 | Variable                 | Description                               | Default (compose/app)                     |
 |--------------------------|-------------------------------------------|-------------------------------------------|
-| DB_USER                  | PostgreSQL username                       | `leaderboard`                             |
-| DB_PASSWORD              | PostgreSQL password                       | n/a                                       |
-| DATABASE_URL             | SQLAlchemy URL                            | `postgresql://leaderboard:...@db:5432/...`|
+| DATABASE_URL             | SQLAlchemy URL (Supabase pooling)         | required                                  |
 | REDIS_URL                | Redis URL (leaderboard cache)             | `redis://redis:6379/0`                    |
 | CELERY_BROKER_URL        | Celery broker                             | `redis://redis:6379/1`                    |
 | CELERY_RESULT_BACKEND    | Celery result backend                     | `redis://redis:6379/1`                    |
@@ -363,15 +360,14 @@ pip install -r requirements.txt
 ```
 
 ### 2) Services
-Run local Postgres and Redis (e.g., via Docker):
+Run Redis (e.g., via Docker):
 ```bash
-docker run -d --name rl-db -e POSTGRES_DB=leaderboard -e POSTGRES_USER=leaderboard -e POSTGRES_PASSWORD=change-me-strong -p 5432:5432 postgres:15
 docker run -d --name rl-redis -p 6379:6379 redis:7
 ```
 
 Export environment (adjust as needed):
 ```bash
-export DATABASE_URL=postgresql://leaderboard:change-me-strong@localhost:5432/leaderboard
+export DATABASE_URL=postgresql://postgres:<encoded_password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require\&options=project%3D<project-ref>
 export REDIS_URL=redis://localhost:6379/0
 export CELERY_BROKER_URL=redis://localhost:6379/1
 export CELERY_RESULT_BACKEND=redis://localhost:6379/1

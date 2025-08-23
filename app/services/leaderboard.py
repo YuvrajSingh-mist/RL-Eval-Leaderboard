@@ -201,6 +201,20 @@ class RedisLeaderboard:
             
         try:
             leaderboard_key = self.leaderboard_key.format(env_id=env_id)
+            # Determine global top 3 medal mapping (independent of filters/sort)
+            top3_medal_map: dict[str, str] = {}
+            try:
+                top3_ids_raw = self.redis_client.zrevrange(leaderboard_key, 0, 2)
+                top3_ids = [i.decode('utf-8') for i in top3_ids_raw] if top3_ids_raw else []
+                for idx, sid in enumerate(top3_ids):
+                    if idx == 0:
+                        top3_medal_map[sid] = 'gold'
+                    elif idx == 1:
+                        top3_medal_map[sid] = 'silver'
+                    elif idx == 2:
+                        top3_medal_map[sid] = 'bronze'
+            except Exception:
+                top3_medal_map = {}
             
             # Fetch more than requested to allow filters to reduce results
             fetch_count = min(max(limit * 5, 200), 2000)
@@ -212,6 +226,25 @@ class RedisLeaderboard:
                 # Fallback to DB if Redis empty
                 try:
                     db = SessionLocal()
+                    # Compute top3 for medals via DB (global top 3 by score for env)
+                    try:
+                        top3_rows = (
+                            db.query(LeaderboardEntry)
+                            .filter(LeaderboardEntry.env_id == env_id)
+                            .order_by(LeaderboardEntry.score.desc(), LeaderboardEntry.created_at.asc(), LeaderboardEntry.id.asc())
+                            .limit(3)
+                            .all()
+                        )
+                        top3_medal_map = {}
+                        for idx, r in enumerate(top3_rows):
+                            if idx == 0:
+                                top3_medal_map[r.id] = 'gold'
+                            elif idx == 1:
+                                top3_medal_map[r.id] = 'silver'
+                            elif idx == 2:
+                                top3_medal_map[r.id] = 'bronze'
+                    except Exception:
+                        top3_medal_map = {}
                     q = db.query(LeaderboardEntry).filter(LeaderboardEntry.env_id == env_id)
 
                     # Apply filters
@@ -250,8 +283,9 @@ class RedisLeaderboard:
                         q = q.order_by(LeaderboardEntry.score.desc(), LeaderboardEntry.created_at.asc(), LeaderboardEntry.id.asc())
 
                     rows = q.limit(limit).all()
-                    return [
-                        {
+                    result = []
+                    for i, row in enumerate(rows):
+                        result.append({
                             'rank': i + 1,
                             'id': row.id,
                             'user_id': row.user_id,
@@ -259,9 +293,9 @@ class RedisLeaderboard:
                             'score': float(row.score),
                             'created_at': row.created_at.isoformat(),
                             'env_id': row.env_id,
-                        }
-                        for i, row in enumerate(rows)
-                    ]
+                            'medal': top3_medal_map.get(row.id),
+                        })
+                    return result
                 except Exception as e:
                     logger.error(f"DB fallback failed for leaderboard {env_id}: {str(e)}")
                     return []
@@ -370,6 +404,7 @@ class RedisLeaderboard:
                     'score': float(e['score']) if e['score'] is not None else None,
                     'created_at': created_str,
                     'env_id': e['env_id'],
+                    'medal': top3_medal_map.get(e['id']),
                 })
             return result
             

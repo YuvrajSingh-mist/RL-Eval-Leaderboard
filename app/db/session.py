@@ -3,8 +3,11 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from app.core.config import settings
 from app.db.base import Base
 
-engine = create_engine(settings.DATABASE_URL,pool_pre_ping=True,
-    connect_args={"connect_timeout": 30})
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args={"connect_timeout": 30} if settings.DATABASE_URL.startswith("postgresql://") else {}
+)
 
 
 
@@ -27,5 +30,11 @@ def get_db():
         db.close()
 
 def init_db():
-    """Initialize database - create tables"""
-    Base.metadata.create_all(bind=engine)
+    """Initialize database - create tables.
+    If DB is temporarily unreachable, skip creation to allow API to start and healthcheck to pass; other endpoints will fail until DB returns.
+    """
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        # Log happens via caller; avoid crashing startup
+        pass

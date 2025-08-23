@@ -2,20 +2,6 @@
 version: '3.8'
 
 services:
-  db:
-    image: postgres:15
-    env_file: .env
-    environment:
-      POSTGRES_DB: leaderboard
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - pg_:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - rl-net
-
   redis:
     image: redis:7
     env_file: .env
@@ -40,7 +26,7 @@ services:
       - "8000:8000"
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/leaderboard
+      - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -51,15 +37,17 @@ services:
       - SERVICE_NAME=api
       # Sentry removed; logs go to stdout and Promtail ships to Loki
     depends_on:
-      - db
       - redis
     networks:
       - rl-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8000/health\", timeout=5).status==200 else 1)' "]
       interval: 30s
       timeout: 10s
       retries: 3
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   worker:
     build:
@@ -77,7 +65,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/leaderboard
+      - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -102,6 +90,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   evaluator:
     image: rl-evaluator:latest
@@ -128,7 +119,7 @@ services:
     networks:
       - rl-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7860"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:7860\", timeout=5).status==200 else 1)' "]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -248,7 +239,6 @@ services:
       - loki
 
 volumes:
-  pg_:
   prometheus_data:
   loki_data:
   promtail_positions:

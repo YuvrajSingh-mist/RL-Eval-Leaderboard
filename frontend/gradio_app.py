@@ -134,17 +134,15 @@ def get_leaderboard(env_id, id_query, user_query, algorithm_query, score_min, sc
             score_num = float(score_val) if isinstance(score_val, (int, float)) else None
 
             rank_val = e.get("rank", None)
-            medal = ""
-            try:
-                if int(rank_val) == 1:
-                    medal = "🥇 "
-                elif int(rank_val) == 2:
-                    medal = "🥈 "
-                elif int(rank_val) == 3:
-                    medal = "🥉 "
-            except Exception:
-                pass
-            rank_str = f"{medal}{rank_val}" if rank_val is not None else "-"
+            medal_field = str(e.get("medal", "" ) or "").lower()
+            medal_icon = ""
+            if medal_field == "gold":
+                medal_icon = "🥇 "
+            elif medal_field == "silver":
+                medal_icon = "🥈 "
+            elif medal_field == "bronze":
+                medal_icon = "🥉 "
+            rank_str = f"{medal_icon}{rank_val}" if rank_val is not None else "-"
 
             table.append([
                 rank_str,

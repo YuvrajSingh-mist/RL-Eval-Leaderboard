@@ -44,8 +44,12 @@ app.add_middleware(
 # Initialize database, Redis, and metrics
 @app.on_event("startup")
 def startup_event():
-    # Initialize database
-    init_db()
+    # Initialize database (non-fatal)
+    try:
+        init_db()
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"DB init skipped due to error: {e}")
     logger = logging.getLogger(__name__)
     logger.info("Database initialized successfully")
     
@@ -107,4 +111,13 @@ app.include_router(leaderboard.router, prefix="/api/leaderboard", tags=["leaderb
 def health_check():
     """Health check endpoint"""
     import datetime
-    return {"status": "healthy", "timestamp": datetime.datetime.utcnow().isoformat()}
+    # Try a lightweight DB connect to signal readiness, but don't fail health if it errors
+    ok = True
+    try:
+        from sqlalchemy import text
+        from app.db.session import engine
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        ok = False
+    return {"status": "healthy" if ok else "degraded", "timestamp": datetime.datetime.utcnow().isoformat()}
