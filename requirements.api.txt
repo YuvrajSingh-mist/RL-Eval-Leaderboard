@@ -5,6 +5,11 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 gymnasium
+gymnasium[mujoco]
+gymnasium[classic-control]
+swig
+gymnasium[box2d]
+
 pydantic-settings
 redis
 docker

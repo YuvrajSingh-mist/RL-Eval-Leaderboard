@@ -113,7 +113,7 @@ services:
     volumes:
       - ./frontend:/home/appuser/frontend
     environment:
-      - API_URL=http://api:8000
+      - API_URL=https://amazing-cleanly-ram.ngrok-free.app
     depends_on:
       - api
     networks:
