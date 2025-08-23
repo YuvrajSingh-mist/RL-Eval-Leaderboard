@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import submissions, leaderboard
+from app.api import alerts
 from app.api import visitor
 from app.db.session import init_db
 from app.core.config import settings
@@ -131,6 +132,7 @@ async def request_logging_middleware(request: Request, call_next):
 # Include API routes
 app.include_router(submissions.router, prefix="/api", tags=["submissions"])
 app.include_router(leaderboard.router, prefix="/api/leaderboard", tags=["leaderboard"])
+app.include_router(alerts.router, prefix="/api", tags=["alerts"])
 app.include_router(visitor.router, prefix="/api", tags=["visitor"])
 
 @app.get("/health")

@@ -8,6 +8,7 @@ import os
 import logging
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 PORT = int(os.getenv("PORT", "7860"))
+GITHUB_URL = os.getenv("GITHUB_URL", "https://github.com/")
 _last_submission_id = None
 logger = logging.getLogger(__name__)
 
@@ -243,8 +244,29 @@ with gr.Blocks(title="SimpleRL Leaderboard", css="""
 .status-kv .value { color: #e8f5ef; font-weight: 500; }
 .status-foot { margin-top: 10px; color: #9ecfb6; font-size: .95em; }
 .status-box pre { white-space: pre-wrap; background: #111; color: #eee; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.06); }
+/* Cute GitHub button (top-right) */
+.gh-btn {
+  position: fixed; top: 12px; right: 12px; z-index: 9999;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 999px;
+  background: linear-gradient(180deg, #24292e, #1f2328);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 8px 20px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+  color: #fff; text-decoration: none; font-weight: 600;
+}
+.gh-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.gh-btn:active { transform: translateY(0); }
+.gh-ico { font-size: 1.1rem; line-height: 1; }
+.gh-text { font-size: .95rem; }
+@media (max-width: 520px) { .gh-text { display: none; } }
 """) as demo:
     gr.Markdown("# 🏆 SimpleRL Leaderboard")
+    gr.HTML(f"""
+    <a class=\"gh-btn\" href=\"{GITHUB_URL}\" target=\"_blank\" rel=\"noopener\" aria-label=\"View project on GitHub\"> 
+      <span class=\"gh-ico\">🐙</span>
+      <span class=\"gh-text\">GitHub</span>
+    </a>
+    """)
     
     # About / README tab
     def _load_readme_text():

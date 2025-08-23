@@ -9,7 +9,7 @@ gymnasium[mujoco]
 gymnasium[classic-control]
 swig
 gymnasium[box2d]
-
+ale-py
 pydantic-settings
 redis
 docker

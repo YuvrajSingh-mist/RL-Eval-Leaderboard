@@ -85,3 +85,9 @@ def visitor_pixel(request: Request):
     return Response(content=png_bytes, media_type="image/png", headers=headers)
 
 
+@router.head("/visitor/pixel")
+def visitor_pixel_head():
+    # Allow HEAD requests to succeed for monitoring and curl -I
+    return Response(status_code=200)
+
+
