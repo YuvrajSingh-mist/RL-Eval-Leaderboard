@@ -273,7 +273,7 @@ with gr.Blocks(title="SimpleRL Leaderboard", css="""
             - **5. Submit**: Click "Submit for Evaluation". Copy the shown **Submission ID**.
             - **6. Check progress**: Use the ID in the "Check Status" tab or wait for the Leaderboard to update.
 
-            Tip: See the example agent at `example_agents/dqn.py` in this repository.
+            Tip: See the example agents at `example_agents/dqn.py` and `example_agents/q_learning.py` in this repository.
 
             ### Tabs guide
             - **Submit Agent**: Upload a `.py` file, choose environment and algorithm name, then submit. Keep the Submission ID to monitor results or debug failures.

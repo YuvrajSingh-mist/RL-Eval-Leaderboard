@@ -169,9 +169,9 @@ Examples:
 Single file:
 ```bash
 curl -X POST \
-  -F "file=@example_agents/dqn.py" \
+  -F "file=@example_agents/q_learning.py" \
   -F "env_id=CartPole-v1" \
-  -F "algorithm=DQN" \
+  -F "algorithm=Q-Learning" \
   -F "user_id=team-rocket" \
   http://localhost:8000/api/submit/
 ```
@@ -249,7 +249,7 @@ Notes on the evaluator runtime (see `scripts/entrypoint.sh` and `app/core/docker
 - Multi-file uploads are bundled and extracted into `/home/appuser`; your local imports like `import policy` will work when `policy.py` is uploaded alongside the main file.
 - The worker parses container logs and extracts the last valid JSON line. If no `score` is found or the process exits non-zero, the submission is marked failed with a helpful log tail.
 
-See `example_agents/dqn.py` for a simple reference implementation.
+See `example_agents/q_learning.py` for a simple reference implementation.
 
 ### Exact JSON Output Requirements
 
@@ -311,6 +311,77 @@ if __name__ == "__main__":
     main()
 ```
 
+### Example: Simple Q-learning agent (discrete envs)
+
+This example mirrors `example_agents/q_learning.py` and satisfies the evaluator contract. It expects a Gymnasium environment ID and prints a single JSON line with a numeric `score` and optional `metrics`.
+
+```python
+import sys, json
+import numpy as np
+import gymnasium as gym
+
+
+def train_q_learning(env_id: str, episodes: int = 200, max_steps: int = 100) -> dict:
+    # For FrozenLake, use deterministic dynamics for faster convergence
+    env_kwargs = {"is_slippery": False} if str(env_id).startswith("FrozenLake") else {}
+    env = gym.make(env_id, **env_kwargs)
+
+    # Discrete state/action spaces only
+    if not hasattr(env.action_space, "n") or not hasattr(env.observation_space, "n"):
+        return {"error": "Requires discrete state and action spaces"}
+
+    num_states = int(env.observation_space.n)
+    num_actions = int(env.action_space.n)
+    q_table = np.zeros((num_states, num_actions), dtype=np.float32)
+
+    alpha, gamma = 0.1, 0.95
+    epsilon, min_epsilon, decay = 1.0, 0.05, 0.995
+    episode_rewards = []
+
+    for _ in range(episodes):
+        reset_out = env.reset()
+        state = reset_out[0] if isinstance(reset_out, tuple) else reset_out
+        state = int(state)
+        total_reward = 0.0
+
+        for _ in range(max_steps):
+            action = env.action_space.sample() if np.random.rand() < epsilon else int(np.argmax(q_table[state]))
+            step_out = env.step(action)
+            next_state, reward = step_out[0], step_out[1]
+            terminated, truncated = step_out[2], step_out[3]
+            done = bool(terminated or truncated)
+
+            if isinstance(next_state, tuple):
+                next_state = next_state[0]
+            next_state = int(next_state)
+
+            best_next = float(np.max(q_table[next_state]))
+            q_table[state, action] = (1 - alpha) * q_table[state, action] + alpha * (reward + gamma * best_next)
+
+            state = next_state
+            total_reward += float(reward)
+            if done:
+                break
+
+        epsilon = max(min_epsilon, epsilon * decay)
+        episode_rewards.append(total_reward)
+
+    env.close()
+    return {"score": float(np.mean(episode_rewards)), "metrics": episode_rewards, "episodes": episodes}
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Missing environment ID"}))
+        raise SystemExit(1)
+    result = train_q_learning(sys.argv[1])
+    if not isinstance(result, dict) or "score" not in result:
+        print(json.dumps({"error": "No score produced"}))
+        raise SystemExit(1)
+    # Print exactly one final JSON line
+    print(json.dumps(result))
+```
+
 ### Local smoke test
 
 - Run your script locally to verify it prints one final JSON line:
@@ -342,7 +413,7 @@ app/
 frontend/              # Gradio web app
 docker/                # Evaluator Dockerfile
 scripts/entrypoint.sh  # Evaluator container entrypoint
-example_agents/        # Sample agents (e.g., dqn.py)
+example_agents/        # Sample agents (e.g., q_learning.py)
 docker-compose.yml     # Orchestrates API, Worker, DB, Redis, Frontend
 ```
 
@@ -572,9 +643,9 @@ Open [http://localhost:7860](http://localhost:7860) in your browser.
 ```json
 {
   "user_id": "user123",
-  "algorithm": "DQN",
+  "algorithm": "Q-Learning",
   "env_id": "CartPole-v1",
-  "agent_file": "dqn.py"
+  "agent_file": "q_learning.py"
 }
 ```
 
