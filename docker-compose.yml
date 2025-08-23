@@ -58,7 +58,11 @@ services:
       x-bake:
         # platforms:
         #   - linux/amd64
-    command: celery -A app.core.celery.celery_app worker --loglevel=info -P prefork -c 4
+    command:
+      - sh
+      - -lc
+      - |
+        exec celery -A app.core.celery.celery_app worker --loglevel=info -P prefork -c "$(python -c 'import multiprocessing as m; print(max(1, m.cpu_count()//2))')"
     volumes:
       - ./app:/home/appuser/app
       - ./worker:/home/appuser/worker
@@ -77,6 +81,8 @@ services:
       - WORKER_METRICS_PORT=9100
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prom_metrics
       - SERVICE_NAME=worker
+      # - ALERTMANAGER_SMTP_PASSWORD_FILE=${ALERTMANAGER_SMTP_PASSWORD_FILE}
+      - VISITOR_JWT_SECRET=${VISITOR_JWT_SECRET}
     depends_on:
       - api
     networks:
@@ -206,9 +212,11 @@ services:
       - --storage.path=/data
     volumes:
       - ./alertmanager/config.yml:/etc/alertmanager/config.yml:ro
+      - ${ALERTMANAGER_SMTP_PASSWORD_FILE}:/run/secrets/alertmanager_smtp_password:ro
       - alertmanager_data:/data
     ports:
       - "9093:9093"
+    user: "0:0"
     networks:
       - rl-net
     depends_on:

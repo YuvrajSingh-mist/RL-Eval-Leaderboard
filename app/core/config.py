@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     # Evaluator image
     EVALUATOR_IMAGE: str = os.getenv("EVALUATOR_IMAGE", "rl-evaluator:latest")
 
-    # Visitor JWT settings
-    VISITOR_JWT_SECRET: str = os.getenv("VISITOR_JWT_SECRET", "change-me-visitors")
+    # Visitor JWT settings (must be provided via env)
+    VISITOR_JWT_SECRET: str = os.getenv("VISITOR_JWT_SECRET", "")
     VISITOR_JWT_ISSUER: str = os.getenv("VISITOR_JWT_ISSUER", "simple-rl")
     VISITOR_JWT_AUDIENCE: str = os.getenv("VISITOR_JWT_AUDIENCE", "visitor")
     VISITOR_JWT_TTL_DAYS: int = int(os.getenv("VISITOR_JWT_TTL_DAYS", "30"))
@@ -41,3 +41,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Enforce non-empty JWT secret and allow optional file-based fallback
+
+if not settings.VISITOR_JWT_SECRET:
+    raise RuntimeError(
+        "VISITOR_JWT_SECRET is not set. Provide it via env."
+    )
