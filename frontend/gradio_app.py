@@ -8,7 +8,7 @@ import os
 import logging
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 PORT = int(os.getenv("PORT", "7860"))
-GITHUB_URL = os.getenv("GITHUB_URL", "https://github.com/")
+GITHUB_URL = "https://github.com/YuvrajSingh-mist/RL-Eval-Leaderboard"
 _last_submission_id = None
 logger = logging.getLogger(__name__)
 
