@@ -69,8 +69,8 @@ def _on_task_start(task_id=None, task=None, args=None, kwargs=None, **extra_kwar
                 "submission_id": submission_id,
             },
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger(__name__).debug("celery_task_start_log_failed", extra={"error": str(e)})
 
 
 @task_postrun.connect
@@ -90,8 +90,8 @@ def _on_task_success(task_id=None, task=None, args=None, kwargs=None, retval=Non
                 "submission_id": submission_id,
             },
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger(__name__).debug("celery_task_success_log_failed", extra={"error": str(e)})
 
 
 @task_failure.connect
@@ -111,8 +111,8 @@ def _on_task_failure(task_id=None, exception=None, args=None, kwargs=None, trace
                 "submission_id": submission_id,
             },
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger(__name__).debug("celery_task_failure_log_failed", extra={"error": str(e)})
 
 
 @task_retry.connect
@@ -127,8 +127,8 @@ def _on_task_retry(request=None, reason=None, einfo=None, **extra_kwargs):
                 "submission_id": (getattr(request, "args", None) or [None])[0],
             },
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger(__name__).debug("celery_task_retry_log_failed", extra={"error": str(e)})
 
 @celery_app.task(bind=True, max_retries=3)
 def evaluate_submission_task(self, submission_id: str):

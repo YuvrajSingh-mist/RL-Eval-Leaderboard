@@ -30,7 +30,7 @@ app = FastAPI(
 try:
     init_fastapi_instrumentation(app)
 except Exception as _e:
-    logging.getLogger(__name__).error(f"Prometheus metrics init failed: {_e}")
+    logging.getLogger(__name__).exception("Prometheus metrics init failed", extra={"error": str(_e)})
 
 # CORS for cross-origin frontend (e.g., Render-hosted Gradio)
 _cors_origins_env = os.getenv("CORS_ORIGINS", "*")
@@ -52,7 +52,7 @@ def startup_event():
         init_db()
     except Exception as e:
         logger = logging.getLogger(__name__)
-        logger.error(f"DB init skipped due to error: {e}")
+        logger.exception("DB init skipped due to error", extra={"error": str(e)})
     logger = logging.getLogger(__name__)
     logger.info("Database initialized successfully")
     
@@ -68,7 +68,7 @@ def startup_event():
         redis_leaderboard.sync_from_submissions()
         redis_leaderboard.warm_redis_from_db()
     except Exception as e:
-        logger.error(f"Failed to connect to Redis: {str(e)}")
+        logger.exception("Failed to initialize Redis leaderboard", extra={"error": str(e)})
         logger.info("Will use database fallback for leaderboard")
 
     # Start background task to refresh unique visitor gauges
@@ -77,12 +77,12 @@ def startup_event():
             while True:
                 try:
                     visitor.refresh_unique_visitor_metrics()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.getLogger(__name__).debug("visitor_metrics_refresh_loop_error", extra={"error": str(e)})
                 await asyncio.sleep(30)
         asyncio.create_task(_refresh_loop())
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger(__name__).warning("failed_to_start_refresh_loop", extra={"error": str(e)})
 
 
 @app.middleware("http")
@@ -110,9 +110,11 @@ async def request_logging_middleware(request: Request, call_next):
                     options={"verify_exp": True},
                 )
                 visitor_id = payload.get("sub")
-            except Exception:
+            except Exception as e:
+                logging.getLogger(__name__).debug("request_middleware_jwt_decode_failed", extra={"error": str(e)})
                 visitor_id = None
-    except Exception:
+    except Exception as e:
+        logging.getLogger(__name__).debug("request_middleware_token_extraction_failed", extra={"error": str(e)})
         visitor_id = None
 
     try:
@@ -160,6 +162,7 @@ def health_check():
         from app.db.session import engine
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-    except Exception:
+    except Exception as e:
+        logging.getLogger(__name__).debug("health_db_check_failed", extra={"error": str(e)})
         ok = False
     return {"status": "healthy" if ok else "degraded", "timestamp": datetime.datetime.utcnow().isoformat()}

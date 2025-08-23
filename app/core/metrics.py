@@ -101,7 +101,7 @@ def init_fastapi_instrumentation(app) -> None:
     try:
         from prometheus_fastapi_instrumentator import Instrumentator  # type: ignore
     except Exception as e:
-        logging.getLogger(__name__).error(f"Prometheus FastAPI Instrumentator not available: {e}")
+        logging.getLogger(__name__).warning("fastapi_instrumentator_unavailable", extra={"error": str(e)})
         return
     instrumentator = Instrumentator()
     instrumentator.instrument(app)
@@ -127,11 +127,11 @@ def start_worker_metrics_server(port: Optional[int] = None) -> None:
                     if fname.endswith(".db"):
                         try:
                             os.remove(os.path.join(mp_dir, fname))
-                        except Exception:
-                            pass
-            except Exception:
+                        except Exception as e:
+                            logging.getLogger(__name__).debug("mp_dir_cleanup_failed", extra={"file": fname, "error": str(e)})
+            except Exception as e:
                 # best effort; do not crash worker
-                pass
+                logging.getLogger(__name__).debug("mp_dir_prepare_failed", extra={"error": str(e)})
 
             # Build a dedicated multiprocess registry
             from prometheus_client import CollectorRegistry, multiprocess
@@ -141,9 +141,9 @@ def start_worker_metrics_server(port: Optional[int] = None) -> None:
             start_http_server(p, registry=registry)
         else:
             start_http_server(p)
-    except OSError:
+    except OSError as e:
         # Port already in use; ignore to prevent crash in forked workers
-        pass
+        logging.getLogger(__name__).debug("worker_metrics_port_in_use", extra={"port": p, "error": str(e)})
 
 
 def start_celery_queue_length_collector(
@@ -168,11 +168,12 @@ def start_celery_queue_length_collector(
                     try:
                         llen = client.llen(q) if client is not None else 0
                         CELERY_QUEUE_LENGTH.labels(queue_name=q).set(float(llen))
-                    except Exception:
+                    except Exception as e:
                         # Keep going for other queues
-                        pass
-            except Exception:
+                        logging.getLogger(__name__).debug("queue_length_collect_failed", extra={"queue": q, "error": str(e)})
+            except Exception as e:
                 client = None
+                logging.getLogger(__name__).debug("queue_length_loop_error", extra={"error": str(e)})
             finally:
                 stop_event.wait(interval_seconds)
 

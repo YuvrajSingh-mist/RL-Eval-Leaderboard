@@ -100,8 +100,14 @@ def evaluate_submission(submission_id: str) -> dict:
             try:
                 EVALUATION_COMPLETED_TOTAL.labels(env_id=submission.env_id).inc()
                 EVALUATION_DURATION_SECONDS.labels(env_id=submission.env_id).observe(timer.seconds)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(
+                    "metrics_update_failed_after_success",
+                    extra={
+                        "submission_id": submission_id,
+                        "error": str(e),
+                    },
+                )
             # Push to Redis leaderboard for immediate visibility
             try:
                 redis_leaderboard.add_submission(submission)
@@ -143,8 +149,14 @@ def evaluate_submission(submission_id: str) -> dict:
         try:
             EVALUATION_FAILED_TOTAL.labels(reason="script_error").inc()
             EVALUATION_DURATION_SECONDS.labels(env_id=submission.env_id).observe(timer.seconds)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "metrics_update_failed_after_failure",
+                extra={
+                    "submission_id": submission_id,
+                    "error": str(e),
+                },
+            )
         return {"status": "failed", "error": error_msg}
     
     except Exception as e:
@@ -172,8 +184,11 @@ def evaluate_submission(submission_id: str) -> dict:
         
         try:
             EVALUATION_FAILED_TOTAL.labels(reason="unexpected_exception").inc()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "artifact_cleanup_failed",
+                extra={"submission_id": submission_id, "error": str(e)},
+            )
         return {"status": "error", "message": error_msg}
     
     finally:

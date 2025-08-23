@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, Response, HTTPException
+import logging
 from app.core.config import settings
 import time
 import jwt
@@ -8,6 +9,7 @@ import redis
 from prometheus_client import Gauge
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Redis client for visitor metrics (DB 0)
 _r = None
@@ -61,8 +63,11 @@ def get_visitor_token(request: Request):
                 options={"verify_exp": True},
             )
             return {"token": token}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "visitor_token_invalid",
+                extra={"error": str(e)},
+            )
     new_token = _issue_visitor_token()
     resp = Response(content=f"{{\"token\": \"{new_token}\"}}", media_type="application/json")
     # 30 days ~ 2592000 seconds
@@ -95,7 +100,8 @@ def visitor_pixel(request: Request):
                 options={"verify_exp": True},
             )
             vid = payload.get("sub")
-        except Exception:
+        except Exception as e:
+            logger.debug("visitor_pixel_jwt_decode_failed", extra={"error": str(e)})
             vid = None
 
     # Count unique visitors via Redis HyperLogLog per day
@@ -105,8 +111,11 @@ def visitor_pixel(request: Request):
             _redis().pfadd(_hll_key(today), vid)
             _redis().pfadd(_hll_month_key(today), vid)
             _redis().pfadd(_HLL_ALLTIME_KEY, vid)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(
+            "visitor_hll_update_failed",
+            extra={"visitor_id": vid, "error": str(e)},
+        )
 
     # Minimal logging via application logger
     import logging
@@ -138,8 +147,8 @@ def refresh_unique_visitor_metrics() -> None:
         # All-time
         try:
             UNIQUE_VISITORS_ALLTIME.set(float(_redis().pfcount(_HLL_ALLTIME_KEY)))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("visitor_alltime_metric_refresh_failed", extra={"error": str(e)})
 
         # Per-month for last 13 months (current + 12 back)
         for i in range(13):
@@ -151,11 +160,14 @@ def refresh_unique_visitor_metrics() -> None:
             try:
                 val = float(_redis().pfcount(key))
                 UNIQUE_VISITORS_MONTH.labels(month=m.strftime('%Y-%m')).set(val)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(
+                    "visitor_month_metric_refresh_failed",
+                    extra={"month": m.strftime('%Y-%m'), "error": str(e)},
+                )
             # Step back one month
             m = (m - dt.timedelta(days=1)).replace(day=1)
-    except Exception:
+    except Exception as e:
         # do not raise; metrics are best-effort
-        pass
+        logger.warning("visitor_metrics_refresh_failed", extra={"error": str(e)})
 

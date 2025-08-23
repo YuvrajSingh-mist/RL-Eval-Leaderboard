@@ -90,10 +90,10 @@ def setup_logging() -> None:
             # Remove existing handlers to avoid duplicate non-JSON output
             try:
                 lg.handlers.clear()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.getLogger(__name__).debug("clear_child_logger_handlers_failed", extra={"logger": name, "error": str(e)})
             lg.propagate = True
-        except Exception:
-            pass
+        except Exception as e:
+            logging.getLogger(__name__).debug("child_logger_setup_failed", extra={"logger": name, "error": str(e)})
 
 

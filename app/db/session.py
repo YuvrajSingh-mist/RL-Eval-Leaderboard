@@ -35,6 +35,7 @@ def init_db():
     """
     try:
         Base.metadata.create_all(bind=engine)
-    except Exception:
+    except Exception as e:
         # Log happens via caller; avoid crashing startup
-        pass
+        import logging
+        logging.getLogger(__name__).warning("init_db_create_all_failed", extra={"error": str(e)})

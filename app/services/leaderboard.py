@@ -67,8 +67,8 @@ class RedisLeaderboard:
         finally:
             try:
                 db.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("db_close_failed_after_backfill", extra={"error": str(e)})
 
     def warm_redis_from_db(self, limit_per_env: int = 1000):
         """Populate Redis sorted sets from persistent DB entries."""
@@ -92,8 +92,8 @@ class RedisLeaderboard:
                 # Clear existing to avoid stale data
                 try:
                     self.redis_client.delete(leaderboard_key)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("redis_delete_leaderboard_failed", extra={"env_id": env_id, "error": str(e)})
                 # Write fresh
                 for row in rows:
                     self.redis_client.zadd(leaderboard_key, {row.id: float(row.score)})
@@ -116,8 +116,8 @@ class RedisLeaderboard:
         finally:
             try:
                 db.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("db_close_failed_after_warm", extra={"error": str(e)})
     
     def add_submission(self, submission: Submission):
         """Add submission to leaderboard when completed"""
@@ -223,7 +223,8 @@ class RedisLeaderboard:
                         top3_medal_map[sid] = 'bronze'
                         break
                     rank_idx += 1
-            except Exception:
+            except Exception as e:
+                logger.debug("compute_top3_medals_failed_redis", extra={"env_id": env_id, "error": str(e)})
                 top3_medal_map = {}
             
             # Fetch more than requested to allow filters to reduce results
@@ -256,7 +257,8 @@ class RedisLeaderboard:
                                 top3_medal_map[r.id] = 'silver'
                             elif idx == 2:
                                 top3_medal_map[r.id] = 'bronze'
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("compute_top3_medals_failed_db", extra={"env_id": env_id, "error": str(e)})
                         top3_medal_map = {}
                     q = db.query(LeaderboardEntry).filter(LeaderboardEntry.env_id == env_id)
 
@@ -277,14 +279,14 @@ class RedisLeaderboard:
                         try:
                             df = datetime.strptime(date_from, "%Y-%m-%d")
                             q = q.filter(LeaderboardEntry.created_at >= df)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("date_from_parse_failed", extra={"date_from": date_from, "error": str(e)})
                     if date_to:
                         try:
                             dt = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1) - timedelta(microseconds=1)
                             q = q.filter(LeaderboardEntry.created_at <= dt)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("date_to_parse_failed", extra={"date_to": date_to, "error": str(e)})
 
                     # Sorting
                     s = (sort or "score_desc").lower()
@@ -362,26 +364,26 @@ class RedisLeaderboard:
                 try:
                     smin = float(score_min)
                     entries = [e for e in entries if (e['score'] is not None and e['score'] >= smin)]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("score_min_parse_failed", extra={"score_min": score_min, "error": str(e)})
             if score_max is not None:
                 try:
                     smax = float(score_max)
                     entries = [e for e in entries if (e['score'] is not None and e['score'] <= smax)]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("score_max_parse_failed", extra={"score_max": score_max, "error": str(e)})
             if date_from:
                 try:
                     df = datetime.strptime(date_from, "%Y-%m-%d")
                     entries = [e for e in entries if (e['created_at'] is not None and e['created_at'] >= df)]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("date_from_parse_failed_entries", extra={"date_from": date_from, "error": str(e)})
             if date_to:
                 try:
                     dt_to_val = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1) - timedelta(microseconds=1)
                     entries = [e for e in entries if (e['created_at'] is not None and e['created_at'] <= dt_to_val)]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("date_to_parse_failed_entries", extra={"date_to": date_to, "error": str(e)})
 
             # Sorting
             s = (sort or 'score_desc').lower()
