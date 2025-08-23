@@ -34,6 +34,26 @@ A production-ready, containerized leaderboard system for evaluating Reinforcemen
 
 ---
 
+
+## Project Structure
+
+```
+app/
+  api/                 # FastAPI routers (submissions, leaderboard)
+  core/                # Config, Celery, Docker client, Supabase client
+  db/                  # SQLAlchemy engine/session and Base
+  models/              # SQLAlchemy models (Submission, EvaluationMetric, LeaderboardEntry)
+  services/            # Leaderboard (Redis) and evaluation orchestration
+  main.py              # FastAPI app factory and startup hooks
+frontend/              # Gradio web app
+docker/                # Evaluator Dockerfile
+scripts/entrypoint.sh  # Evaluator container entrypoint
+example_agents/        # Sample agents (e.g., q_learning.py)
+docker-compose.yml     # Orchestrates API, Worker, DB, Redis, Frontend
+```
+
+---
+
 ## Architecture
 ```
 ┌─────────────────┐      ┌─────────────────┐      ┌────────────────────┐
@@ -151,13 +171,8 @@ These are consumed by the services (see `docker-compose.yml` and `app/core/confi
 
 Endpoint: `POST /api/submit/`
 
-Multipart form fields:
 - Single-file mode (backward compatible):
   - `file`: Python file to evaluate (`.py`)
-- Multi-file mode:
-  - `files`: Repeatable field for multiple files (pass multiple `-F files=@...`). Non-.py support files (e.g., JSON) are allowed.
-  - `main_file` (required when using `files`): The Python filename to execute (must end with `.py`). The server aliases it to `submission.py` inside the evaluator container.
-  - Requirement: At least one uploaded file must be a `.py` when using multi-file mode.
 - Common fields:
   - `env_id`: Gym environment ID (default `CartPole-v1`)
   - `algorithm`: Label for your method (default `Custom`)
@@ -172,19 +187,6 @@ curl -X POST \
   -F "file=@example_agents/q_learning.py" \
   -F "env_id=CartPole-v1" \
   -F "algorithm=Q-Learning" \
-  -F "user_id=team-rocket" \
-  http://localhost:8000/api/submit/
-```
-
-Multiple files with explicit main:
-```bash
-curl -X POST \
-  -F "files=@my_agent/__init__.py" \
-  -F "files=@my_agent/policy.py" \
-  -F "files=@my_agent/runner.py" \
-  -F "main_file=runner.py" \
-  -F "env_id=CartPole-v1" \
-  -F "algorithm=Custom" \
   -F "user_id=team-rocket" \
   http://localhost:8000/api/submit/
 ```
@@ -229,9 +231,8 @@ curl "http://localhost:8000/api/leaderboard/?env_id=CartPole-v1&limit=50"
 ## Submission Contract
 
 Your submission must:
-1. Consist of one or more Python files (`.py`).
-2. Include a main file that will run as `submission.py`. When using multi-file mode, specify `main_file` (e.g., `runner.py`); the server aliases it to `submission.py` inside the container.
-3. Accept the environment ID as its first CLI argument: your script will be invoked as:
+1. Consist of one Python file (`.py`).
+2. Accept the environment ID as its first CLI argument: your script will be invoked as:
    ```bash
    python -u submission.py <ENV_ID>
    ```
@@ -246,7 +247,6 @@ Notes on the evaluator runtime (see `scripts/entrypoint.sh` and `app/core/docker
 - Network disabled (`network_mode="none"`).
 - Memory limit `512MiB`, CPU quota ~50% of one core, PIDs limit 50.
 - Process is wrapped with `timeout 300s`, `nice`, `ionice`, and `ulimit`.
-- Multi-file uploads are bundled and extracted into `/home/appuser`; your local imports like `import policy` will work when `policy.py` is uploaded alongside the main file.
 - The worker parses container logs and extracts the last valid JSON line. If no `score` is found or the process exits non-zero, the submission is marked failed with a helpful log tail.
 
 See `example_agents/q_learning.py` for a simple reference implementation.
@@ -400,24 +400,7 @@ python submission.py CartPole-v1
 
 ---
 
-## Project Structure
 
-```
-app/
-  api/                 # FastAPI routers (submissions, leaderboard)
-  core/                # Config, Celery, Docker client, Supabase client
-  db/                  # SQLAlchemy engine/session and Base
-  models/              # SQLAlchemy models (Submission, EvaluationMetric, LeaderboardEntry)
-  services/            # Leaderboard (Redis) and evaluation orchestration
-  main.py              # FastAPI app factory and startup hooks
-frontend/              # Gradio web app
-docker/                # Evaluator Dockerfile
-scripts/entrypoint.sh  # Evaluator container entrypoint
-example_agents/        # Sample agents (e.g., q_learning.py)
-docker-compose.yml     # Orchestrates API, Worker, DB, Redis, Frontend
-```
-
----
 
 ## Local Development (without Docker)
 
@@ -489,13 +472,13 @@ MIT
 
 ---
 
-## Observability Stack (Prometheus, Grafana, Sentry)
+## Observability Stack (Prometheus, Grafana, Loki)
 
 Production-grade observability is included:
 
 - Prometheus metrics from API and Celery worker
 - Grafana dashboards (pre-provisioned)
-- Sentry error and performance monitoring for API and worker
+- Loki for logs
 
 ### New endpoints/ports
 - API `/metrics` on port 8000
@@ -503,14 +486,7 @@ Production-grade observability is included:
 - Prometheus on port 9090
 - Grafana on port 3000
 
-### Configure Sentry (optional)
-Add these to `.env`:
 
-```
-SENTRY_DSN=<your sentry dsn>
-SENTRY_ENVIRONMENT=development
-SENTRY_TRACES_SAMPLE_RATE=0.1
-```
 
 ### Metrics exposed
 - `submissions_received_total{mode}`
@@ -525,177 +501,3 @@ SENTRY_TRACES_SAMPLE_RATE=0.1
 
 Plus default FastAPI metrics (requests, latencies, status codes, exceptions).
 
-# RL Leaderboard
-
-A scalable, containerized leaderboard system for Reinforcement Learning (RL) agent evaluation. Supports real-time score updates, submission management, and a Gradio-based frontend.
-
----
-
-## Table of Contents
-- [Features](#features)
-- [Architecture](#architecture)
-- [Setup & Installation](#setup--installation)
-- [Environment Variables](#environment-variables)
-- [Usage](#usage)
-- [API Endpoints](#api-endpoints)
-- [Submission Format](#submission-format)
-- [Development](#development)
-- [Testing](#testing)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Features
-- **Leaderboard**: Real-time, Redis-powered sorting and ranking of RL agent submissions.
-- **Submission Management**: Track, evaluate, and store agent submissions.
-- **Celery Worker**: Asynchronous evaluation of agents using Docker containers.
-- **Gradio Frontend**: User-friendly interface for viewing leaderboard and submitting agents.
-- **PostgreSQL Database**: Persistent storage for submissions and metadata.
-- **Redis**: Fast, in-memory data store for leaderboard and task queues.
-- **Dockerized**: All components run in containers for easy deployment.
-
----
-
-## Architecture
-```
-+-------------------+      +-------------------+      +-------------------+
-|   Gradio Frontend |<---->|      API Server   |<---->|   Celery Worker   |
-+-------------------+      +-------------------+      +-------------------+
-         |                        |                          |
-         v                        v                          v
-+-------------------+      +-------------------+      +-------------------+
-|   PostgreSQL DB   |      |      Redis        |      |   Docker Engine   |
-+-------------------+      +-------------------+      +-------------------+
-```
-- **Gradio Frontend**: User interface for leaderboard and submissions.
-- **API Server**: FastAPI backend serving REST endpoints.
-- **Celery Worker**: Handles agent evaluation asynchronously.
-- **PostgreSQL**: Stores submission data.
-- **Redis**: Leaderboard and task queue.
-- **Docker**: Runs agent evaluation in isolated containers.
-
----
-
-## Setup & Installation
-
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.8+
-- Git
-
-### Clone the Repository
-```bash
-git clone <your-repo-url>
-cd RL Leaderboard
-```
-
-### Environment Variables
-Create a `.env` file in the root directory:
-```env
-DB_USER=leaderboard
-DB_PASSWORD=securepassword123
-SECRET_KEY=supersecret
-```
-
-### Build & Start Services
-```bash
-docker-compose up --build -d
-```
-
-### Access the Frontend
-Open [http://localhost:7860](http://localhost:7860) in your browser.
-
----
-
-## Environment Variables
-| Variable         | Description                       | Default                |
-|------------------|-----------------------------------|------------------------|
-| DB_USER          | PostgreSQL username               | leaderboard            |
-| DB_PASSWORD      | PostgreSQL password               | securepassword123      |
-| SECRET_KEY       | API secret key                    | supersecret            |
-| DATABASE_URL     | PostgreSQL connection string      | postgresql://...       |
-| REDIS_URL        | Redis connection string           | redis://redis:6379/0   |
-| CELERY_BROKER_URL| Celery broker (Redis)             | redis://redis:6379/2   |
-| CELERY_RESULT_BACKEND | Celery result backend (Redis) | redis://redis:6379/2   |
-
----
-
-## Usage
-- Submit RL agents via the frontend or API.
-- View leaderboard rankings in real-time.
-- Submissions are evaluated asynchronously in Docker containers.
-
----
-
-## API Endpoints
-
-### Leaderboard
-- `GET /leaderboard/{env_id}`: Get leaderboard for environment.
-
-### Submissions
-- `POST /submissions/`: Submit a new agent.
-- `GET /submissions/{id}`: Get submission details.
-- `DELETE /submissions/{id}`: Remove a submission.
-
-### Example Submission
-```json
-{
-  "user_id": "user123",
-  "algorithm": "Q-Learning",
-  "env_id": "CartPole-v1",
-  "agent_file": "q_learning.py"
-}
-```
-
----
-
-## Development
-
-### Install Python Dependencies
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Run Backend Locally
-```bash
-uvicorn app.main:app --reload
-```
-
-### Run Celery Worker
-```bash
-celery -A app.core.celery.celery_app worker --loglevel=info
-```
-
----
-
-## Testing
-- Add unit tests in the `tests/` directory.
-- Run tests with `pytest`:
-```bash
-pytest
-```
-
----
-
-## Troubleshooting
-- **Database Connection Issues**: Ensure PostgreSQL is running and credentials match `.env`.
-- **Redis Connection Issues**: Ensure Redis is running and accessible.
-- **Docker Errors**: Check Docker daemon status and permissions.
-- **Celery Worker Not Running**: Check logs for errors and verify Redis connection.
-
----
-
-## Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Open a pull request
-
----
-
-## License
-MIT License
