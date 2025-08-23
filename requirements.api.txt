@@ -15,6 +15,7 @@ redis
 docker
 requests
 supabase
+PyJWT
 
 # Observability
 prometheus-client

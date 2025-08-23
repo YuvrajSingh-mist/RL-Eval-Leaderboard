@@ -153,7 +153,7 @@
       "targets": [
         {
           "datasource": "Loki",
-          "expr": "count(count_over_time({service=\"api\"} |= \"request_completed\" [$__range]) by (client))",
+          "expr": "count(sum by (visitor_id) (count_over_time({service=\"api\", visitor_id=~\".+\"} |= \"request_completed\" [$__range])))",
           "refId": "A"
         }
       ]
@@ -165,6 +165,50 @@
       "fieldConfig": {"defaults": {"unit": "short"}},
       "targets": [
         {"expr": "sum(increase(http_requests_total[$__range]))", "refId": "A"}
+      ]
+    }
+    ,
+    {
+      "type": "graph",
+      "title": "Monthly Unique Visitors (JWT)",
+      "gridPos": {"x": 0, "y": 72, "w": 12, "h": 8},
+      "bars": true,
+      "lines": false,
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "count(sum by (visitor_id) (count_over_time({service=\"api\", visitor_id=~\".+\"} |= \"request_completed\" [30d])))",
+          "refId": "A",
+          "interval": "30d"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Monthly API Requests",
+      "gridPos": {"x": 12, "y": 72, "w": 12, "h": 8},
+      "bars": true,
+      "lines": false,
+      "targets": [
+        {
+          "expr": "sum(increase(http_requests_total[30d]))",
+          "refId": "A",
+          "interval": "30d",
+          "legendFormat": "requests"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "All-time Unique Visitors",
+      "gridPos": {"x": 0, "y": 80, "w": 12, "h": 8},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center"},
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "count(sum by (visitor_id) (count_over_time({service=\"api\", visitor_id=~\".+\"} |= \"request_completed\" [5y])))",
+          "refId": "A"
+        }
       ]
     }
   ]

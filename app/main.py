@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import submissions, leaderboard
+from app.api import visitor
 from app.db.session import init_db
 from app.core.config import settings
 from app.services.leaderboard import redis_leaderboard
@@ -77,6 +78,28 @@ async def request_logging_middleware(request: Request, call_next):
     start = time.perf_counter()
     request_id = str(uuid4())
     client = request.client.host if request.client else "-"
+
+    # Extract visitor token (JWT) if present
+    visitor_id = None
+    try:
+        import jwt
+        token = request.cookies.get("visitor_token") or request.headers.get("X-Visitor-Token")
+        if token:
+            try:
+                payload = jwt.decode(
+                    token,
+                    settings.VISITOR_JWT_SECRET,
+                    algorithms=["HS256"],
+                    audience=settings.VISITOR_JWT_AUDIENCE,
+                    issuer=settings.VISITOR_JWT_ISSUER,
+                    options={"verify_exp": True},
+                )
+                visitor_id = payload.get("sub")
+            except Exception:
+                visitor_id = None
+    except Exception:
+        visitor_id = None
+
     try:
         response = await call_next(request)
         duration_ms = int((time.perf_counter() - start) * 1000)
@@ -87,6 +110,7 @@ async def request_logging_middleware(request: Request, call_next):
             "status_code": getattr(response, "status_code", 0),
             "duration_ms": duration_ms,
             "client": client,
+            "visitor_id": visitor_id,
         }
         logger.info("request_completed", extra=extra)
         return response
@@ -99,6 +123,7 @@ async def request_logging_middleware(request: Request, call_next):
             "status_code": 500,
             "duration_ms": duration_ms,
             "client": client,
+            "visitor_id": visitor_id,
         }
         logger.exception("request_failed", extra=extra)
         raise
@@ -106,6 +131,7 @@ async def request_logging_middleware(request: Request, call_next):
 # Include API routes
 app.include_router(submissions.router, prefix="/api", tags=["submissions"])
 app.include_router(leaderboard.router, prefix="/api/leaderboard", tags=["leaderboard"])
+app.include_router(visitor.router, prefix="/api", tags=["visitor"])
 
 @app.get("/health")
 def health_check():

@@ -43,6 +43,7 @@ scrape_configs:
             task_id: task_id
             container_id: container_id
             stage: stage
+            visitor_id: visitor_id
       - labels:
           level:
           name:
@@ -53,4 +54,5 @@ scrape_configs:
           container:
           image:
           client:
+          visitor_id:
 

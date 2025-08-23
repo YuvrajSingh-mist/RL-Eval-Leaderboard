@@ -39,6 +39,7 @@ class ContextDefaultsFilter(logging.Filter):
             "stage",
             "user_id",
             "client_id",
+            "visitor_id",
         ):
             if not hasattr(record, key):
                 setattr(record, key, None)
@@ -65,7 +66,7 @@ def setup_logging() -> None:
         "request_id=%(request_id)s method=%(method)s path=%(path)s "
         "status_code=%(status_code)s duration_ms=%(duration_ms)s client=%(client)s "
         "service=%(service)s submission_id=%(submission_id)s env_id=%(env_id)s algorithm=%(algorithm)s "
-        "task_name=%(task_name)s task_id=%(task_id)s container_id=%(container_id)s stage=%(stage)s"
+        "task_name=%(task_name)s task_id=%(task_id)s container_id=%(container_id)s stage=%(stage)s visitor_id=%(visitor_id)s"
     )
     formatter = jsonlogger.JsonFormatter(
         fmt,

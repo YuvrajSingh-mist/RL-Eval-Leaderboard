@@ -401,6 +401,34 @@ with gr.Blocks(title="SimpleRL Leaderboard", css="""
         }
         </style>
         <script>
+        (function(){
+          const API = (window.API_URL || '%s');
+          async function ensureVisitorToken(){
+            try {
+              // Try cookie-based flow first
+              const r = await fetch(API + '/api/visitor/token', {credentials: 'include'});
+              let tok = null;
+              try { tok = (await r.json()).token; } catch(e) {}
+              if (!tok) {
+                // Fallback: persist in localStorage
+                tok = window.localStorage.getItem('visitor_token');
+                if (!tok) {
+                  // If backend didn’t return JSON (due to CORS), issue a client-side token request not possible.
+                  // Keep null; backend will treat missing cookie but accept header if present later.
+                }
+              } else {
+                try { window.localStorage.setItem('visitor_token', tok); } catch(e) {}
+              }
+              // Fire a pixel; include header if we have a token (works even if third-party cookies blocked)
+              fetch(API + '/api/visitor/pixel?t=' + Date.now(), {
+                mode: 'no-cors',
+                credentials: 'include',
+                headers: tok ? { 'X-Visitor-Token': tok } : {}
+              }).catch(()=>{});
+            } catch (e) { /* noop */ }
+          }
+          window.addEventListener('load', ensureVisitorToken);
+        })();
         setInterval(function() {
             const btn = Array.from(document.querySelectorAll("button"))
                 .find(b => b.innerText.includes("Refresh Leaderboard"));
@@ -411,7 +439,7 @@ with gr.Blocks(title="SimpleRL Leaderboard", css="""
           if (tab) { try { tab.click(); } catch(e){} }
         });
         </script>
-        """)
+        """ % (API_URL))
 
         # Populate environment dropdowns on load using backend discovery
         demo.load(fn=fetch_envs_both, inputs=None, outputs=[env_selector, env_dropdown])
