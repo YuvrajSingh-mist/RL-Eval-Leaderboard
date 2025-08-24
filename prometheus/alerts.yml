@@ -1,9 +1,18 @@
 groups:
   - name: service-health
     rules:
+      - alert: AnyTargetDown
+        expr: up == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: A metrics target is down
+          description: 'Job {{ $labels.job }} instance {{ $labels.instance }} is not scrapeable.'
+
       - alert: APITargetDown
         expr: up{job="api"} == 0
-        for: 1m
+        for: 20s
         labels:
           severity: critical
         annotations:
@@ -12,7 +21,7 @@ groups:
 
       - alert: WorkerTargetDown
         expr: up{job="celery_worker"} == 0
-        for: 1m
+        for: 20s
         labels:
           severity: critical
         annotations:
@@ -22,26 +31,26 @@ groups:
   - name: rl-quality
     rules:
       - alert: HighEvaluationFailures
-        expr: increase(evaluation_failed_total[5m]) > 5
-        for: 5m
+        expr: increase(evaluation_failed_total[1m]) > 3
+        for: 1m
         labels:
           severity: warning
         annotations:
           summary: High evaluation failure rate
-          description: More than 5 failed evaluations in the last 5 minutes.
+          description: More than 3 failed evaluations in the last minute.
 
       - alert: SlowEvaluationsP95
-        expr: histogram_quantile(0.95, sum(rate(evaluation_duration_seconds_bucket[5m])) by (le)) > 60
-        for: 10m
+        expr: histogram_quantile(0.95, sum(rate(evaluation_duration_seconds_bucket[1m])) by (le)) > 30
+        for: 2m
         labels:
           severity: warning
         annotations:
           summary: Evaluation p95 latency is high
-          description: p95 evaluation duration exceeds 60 seconds.
+          description: p95 evaluation duration exceeds 30 seconds.
 
       - alert: LeaderboardLatencyHigh
-        expr: rate(leaderboard_query_duration_seconds_sum[5m]) / rate(leaderboard_query_duration_seconds_count[5m]) > 0.5
-        for: 10m
+        expr: rate(leaderboard_query_duration_seconds_sum[1m]) / rate(leaderboard_query_duration_seconds_count[1m]) > 0.5
+        for: 2m
         labels:
           severity: warning
         annotations:
@@ -49,19 +58,28 @@ groups:
           description: Average leaderboard query duration exceeds 500ms over 10 minutes.
 
       - alert: CeleryQueueBacklog
-        expr: celery_queue_length{queue_name="celery"} > 50
-        for: 10m
+        expr: celery_queue_length{queue_name="celery"} > 20
+        for: 2m
         labels:
           severity: warning
         annotations:
           summary: Celery queue backlog
-          description: Celery queue length is above 50 for 10 minutes.
+          description: Celery queue length is above 20 for 2 minutes.
 
   - name: infrastructure
     rules:
+      - alert: BlackboxProbeFail
+        expr: probe_success == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: Blackbox probe failed
+          description: 'HTTP probe failed for {{ $labels.instance }}.'
+
       - alert: RedisExporterTargetDown
         expr: up{job="redis"} == 0
-        for: 1m
+        for: 20s
         labels:
           severity: critical
         annotations:
@@ -70,7 +88,7 @@ groups:
 
       - alert: RedisDown
         expr: redis_up == 0
-        for: 1m
+        for: 20s
         labels:
           severity: critical
         annotations:
@@ -78,8 +96,8 @@ groups:
           description: redis_exporter reports the Redis instance is unreachable.
 
       - alert: RedisMemoryHigh
-        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
-        for: 10m
+        expr: redis_memory_max_bytes > 0 and (redis_memory_used_bytes / redis_memory_max_bytes) > 0.9
+        for: 2m
         labels:
           severity: warning
         annotations:
@@ -87,8 +105,8 @@ groups:
           description: Redis memory usage exceeded 90% of the configured maxmemory.
 
       - alert: RedisEvictions
-        expr: increase(redis_evicted_keys_total[5m]) > 0
-        for: 5m
+        expr: increase(redis_evicted_keys_total[1m]) > 0
+        for: 1m
         labels:
           severity: warning
         annotations:
@@ -96,8 +114,8 @@ groups:
           description: Redis evicted keys in the last 5 minutes, likely due to memory pressure.
 
       - alert: HostCPUHigh
-        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
-        for: 10m
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 90
+        for: 2m
         labels:
           severity: warning
         annotations:
@@ -106,7 +124,7 @@ groups:
 
       - alert: HostMemoryHigh
         expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
-        for: 10m
+        for: 2m
         labels:
           severity: warning
         annotations:
