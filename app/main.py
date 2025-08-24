@@ -153,16 +153,37 @@ app.include_router(visitor.router, prefix="/api", tags=["visitor"])
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint"""
+    """Liveness + Readiness: verify core dependencies (DB, Redis).
+
+    Returns JSON with overall status and component statuses. If any component
+    check fails, status is "unhealthy".
+    """
     import datetime
-    # Try a lightweight DB connect to signal readiness, but don't fail health if it errors
-    ok = True
+    from sqlalchemy import text
+    import redis as _redis
+
+    statuses: dict[str, str] = {}
+    # DB check
     try:
-        from sqlalchemy import text
         from app.db.session import engine
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+        statuses["database"] = "ok"
     except Exception as e:
-        logging.getLogger(__name__).debug("health_db_check_failed", extra={"error": str(e)})
-        ok = False
-    return {"status": "healthy" if ok else "degraded", "timestamp": datetime.datetime.utcnow().isoformat()}
+        statuses["database"] = f"error: {e}"
+    # Redis check
+    try:
+        r = _redis.from_url(settings.REDIS_URL, socket_timeout=2)
+        r.ping()
+        statuses["redis"] = "ok"
+    except Exception as e:
+        statuses["redis"] = f"error: {e}"
+
+    healthy = all(v == "ok" for v in statuses.values())
+    return {
+        "status": "healthy" if healthy else "unhealthy",
+        "components": statuses,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
