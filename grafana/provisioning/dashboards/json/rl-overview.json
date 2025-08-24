@@ -146,6 +146,41 @@
       ]
     },
     {
+      "type": "gauge",
+      "title": "Host CPU Usage %",
+      "gridPos": {"x": 0, "y": 64, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}},
+      "targets": [
+        {"expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[$__interval])) * 100)"}
+      ]
+    },
+    {
+      "type": "gauge",
+      "title": "Host Memory Usage %",
+      "gridPos": {"x": 12, "y": 64, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}},
+      "targets": [
+        {"expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Redis Memory % of Max",
+      "gridPos": {"x": 0, "y": 72, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "percent"}},
+      "targets": [
+        {"expr": "(max(redis_memory_used_bytes) / max(redis_memory_max_bytes)) * 100", "legendFormat": "used%"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Redis Evicted Keys (rate)",
+      "gridPos": {"x": 12, "y": 72, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "rate(redis_evicted_keys_total[$__interval])", "legendFormat": "evictions"}
+      ]
+    },
+    {
       "type": "stat",
       "title": "Total API Requests (last $__range)",
       "gridPos": {"x": 12, "y": 64, "w": 12, "h": 8},
@@ -176,7 +211,7 @@
     {
       "type": "graph",
       "title": "Monthly API Requests",
-      "gridPos": {"x": 12, "y": 72, "w": 12, "h": 8},
+      "gridPos": {"x": 12, "y": 80, "w": 12, "h": 8},
       "bars": true,
       "lines": false,
       "timeFrom": "365d",
@@ -193,7 +228,7 @@
     {
       "type": "graph",
       "title": "All-time Unique Visitors",
-      "gridPos": {"x": 0, "y": 80, "w": 12, "h": 8},
+      "gridPos": {"x": 0, "y": 88, "w": 12, "h": 8},
       "bars": false,
       "lines": true,
       "points": true,

@@ -104,3 +104,12 @@ groups:
           summary: Host CPU usage is high
           description: Average CPU utilization across cores exceeded 90% for 10 minutes.
 
+      - alert: HostMemoryHigh
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Host memory usage is high
+          description: Host memory usage exceeded 90% for 10 minutes.
+
