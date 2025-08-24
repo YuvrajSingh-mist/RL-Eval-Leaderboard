@@ -171,13 +171,43 @@ def health_check():
         statuses["database"] = "ok"
     except Exception as e:
         statuses["database"] = f"error: {e}"
-    # Redis check
+    # Redis (leaderboard) check
     try:
         r = _redis.from_url(settings.REDIS_URL, socket_timeout=2)
         r.ping()
         statuses["redis"] = "ok"
     except Exception as e:
         statuses["redis"] = f"error: {e}"
+
+    # Celery broker check (may use a different Redis DB)
+    try:
+        broker = _redis.from_url(getattr(settings, "CELERY_BROKER_URL", settings.REDIS_URL), socket_timeout=2)
+        broker.ping()
+        statuses["broker"] = "ok"
+    except Exception as e:
+        statuses["broker"] = f"error: {e}"
+
+    # Celery worker(s) check via control ping
+    try:
+        from app.core.celery import celery_app
+        pongs = celery_app.control.ping(timeout=1.0)
+        statuses["celery_workers"] = "ok" if (isinstance(pongs, list) and len(pongs) > 0) else "error: no workers"
+    except Exception as e:
+        statuses["celery_workers"] = f"error: {e}"
+
+    # Supabase Storage check (bucket access)
+    try:
+        from app.core.client import supabase_client
+        bucket = settings.SUPABASE_BUCKET
+        # list may vary by SDK version; try a minimal call
+        try:
+            supabase_client.storage.from_(bucket).list(path="", limit=1)
+        except TypeError:
+            # older SDK signature
+            supabase_client.storage.from_(bucket).list()
+        statuses["storage"] = "ok"
+    except Exception as e:
+        statuses["storage"] = f"error: {e}"
 
     healthy = all(v == "ok" for v in statuses.values())
     return {
