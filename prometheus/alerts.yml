@@ -57,3 +57,50 @@ groups:
           summary: Celery queue backlog
           description: Celery queue length is above 50 for 10 minutes.
 
+  - name: infrastructure
+    rules:
+      - alert: RedisExporterTargetDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Redis exporter target is down
+          description: Prometheus cannot scrape the redis_exporter metrics target.
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Redis is down
+          description: redis_exporter reports the Redis instance is unreachable.
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis memory usage high
+          description: Redis memory usage exceeded 90% of the configured maxmemory.
+
+      - alert: RedisEvictions
+        expr: increase(redis_evicted_keys_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis is evicting keys
+          description: Redis evicted keys in the last 5 minutes, likely due to memory pressure.
+
+      - alert: HostCPUHigh
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Host CPU usage is high
+          description: Average CPU utilization across cores exceeded 90% for 10 minutes.
+

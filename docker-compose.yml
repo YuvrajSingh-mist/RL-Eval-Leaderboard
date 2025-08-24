@@ -155,6 +155,22 @@ services:
     networks:
       - rl-net
 
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+)($$|/)'
+    pid: host
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - rl-net
+
   prometheus:
     image: prom/prometheus:latest
     volumes:
