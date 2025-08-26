@@ -402,7 +402,104 @@ python submission.py CartPole-v1
 
 
 
-## Local Development (without Docker)
+## Docker Deployment
+
+### Production Deployment with Docker
+
+This section provides complete instructions for deploying the OpenRL Leaderboard using Docker in production environments.
+
+#### Prerequisites
+- Docker and Docker Compose v2
+- Git
+- Supabase account and project setup
+
+#### Step-by-Step Deployment
+
+1. **Clone the repository:**
+```bash
+git clone <your-repo-url>
+cd RL\ Leaderboard
+```
+
+2. **Create environment configuration:**
+Create a `.env` file at the repo root with your production configuration:
+```env
+# FastAPI app security (CHANGE THIS IN PRODUCTION)
+SECRET_KEY=your-super-secret-production-key
+
+# Supabase configuration (required)
+SUPABASE_URL=https://<your-project-ref>.supabase.co
+SUPABASE_ANON_KEY=your-public-anon-key
+SUPABASE_SERVICE_KEY=your-service-role-key
+SUPABASE_BUCKET=submissions
+
+# Database connection (use Supabase connection pooling)
+DATABASE_URL=postgresql://postgres:<encoded_password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require&options=project%3D<project-ref>
+
+# Redis configuration
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/1
+CELERY_RESULT_BACKEND=redis://redis:6379/1
+
+# Optional: Sentry for error tracking
+SENTRY_DSN=your-sentry-dsn
+SENTRY_ENVIRONMENT=production
+```
+
+3. **Set up Supabase:**
+   - Create a Storage bucket named `submissions` in your Supabase project
+   - Ensure your service role key has proper permissions for file uploads/downloads
+   - Configure connection pooling for better database performance
+
+4. **Build the evaluator image:**
+```bash
+docker build -f docker/Dockerfile.evaluator -t rl-evaluator:latest .
+```
+
+5. **Deploy the entire stack:**
+```bash
+docker compose up -d --build
+```
+
+6. **Verify deployment:**
+```bash
+docker compose ps
+```
+
+#### Production Access Points
+
+Once deployed, your services will be available at:
+- **Gradio Frontend**: `http://your-domain:7860`
+- **API Documentation**: `http://your-domain:8000/docs`
+- **Health Check**: `http://your-domain:8000/health`
+- **Metrics**: `http://your-domain:8000/metrics`
+- **Prometheus**: `http://your-domain:9090`
+- **Grafana**: `http://your-domain:3000` (admin/admin)
+
+
+#### Management Commands
+
+```bash
+# Stop all services
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Restart specific service
+docker compose restart api
+
+# Update and redeploy
+git pull
+docker compose up -d --build
+
+# Scale workers (if needed)
+docker compose up -d --scale worker=3
+```
+
+---
+
+## Local Development (with Docker)
 
 This is useful for iterating on API/worker code. You still need Docker Engine installed to run evaluator containers.
 
