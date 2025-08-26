@@ -358,7 +358,7 @@ with gr.Blocks(title="SimpleRL Leaderboard", css="""
             # Date filters removed per request
 
         leaderboard = gr.Dataframe(
-            headers=["Rank", "Submission ID", "User", "Score", "Algorithm", "Date (UTC)"],
+            headers=["Rank", "Submission ID", "User", "Score", "Algorithm", "Date (in UTC)"],
             datatype=["str", "str", "str", "number", "str", "str"],
             col_count=(6, "fixed"),
             elem_id="leaderboard-table"
