@@ -1,2 +1,4 @@
 /app/core/config.py
 .env
+.venv/
+.secrets/
