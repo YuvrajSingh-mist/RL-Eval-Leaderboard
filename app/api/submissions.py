@@ -10,6 +10,7 @@ from app.core.metrics import (
     SUBMISSIONS_UPLOAD_BYTES_TOTAL,
     SUBMISSIONS_VALIDATION_FAILURES_TOTAL,
 )
+from typing import Set
 import uuid
 import logging
 import io
@@ -18,6 +19,30 @@ import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# Heuristic list of heavy environments (MuJoCo and similar)
+HEAVY_ENVS: Set[str] = {
+    # Gymnasium MuJoCo classics
+    "Ant-v4", "HalfCheetah-v4", "Hopper-v4", "Humanoid-v4", "Walker2d-v4",
+    # Older gym IDs that might still appear
+    "Ant-v3", "HalfCheetah-v3", "Hopper-v3", "Humanoid-v3", "Walker2d-v3",
+    # Bullet / other physics that are heavy
+    "AntBulletEnv-v0", "HumanoidBulletEnv-v0", "Walker2DBulletEnv-v0",
+}
+
+
+def _select_queue_for_env(env_id: str) -> str:
+    """Return the Celery queue for a given environment.
+
+    - Heavy environments go to the 'heavy' queue (low concurrency worker)
+    - Others use the default 'celery' queue (higher concurrency worker)
+    """
+    try:
+        _id = (env_id or "").strip()
+        return "heavy" if _id in HEAVY_ENVS or "mujoco" in _id.lower() else "celery"
+    except Exception:
+        return "celery"
 
 @router.post("/submit/")
 @router.post("/submit")
@@ -29,7 +54,7 @@ async def submit_rl_script(
     main_file: str | None = Form(None),
     env_id: str = Form("CartPole-v1"),
     algorithm: str = Form("Custom"),
-    user_id: str = Form("anonymous"),
+    name: str = Form("anonymous"),
     client_id: str | None = Form(None),
     db: Session = Depends(get_db)
 ):
@@ -140,7 +165,7 @@ async def submit_rl_script(
                     "submission_id": submission_id,
                     "env_id": env_id,
                     "algorithm": algorithm,
-                    "user_id": user_id,
+                    "user_name": name,
                     "client_id": client_id,
                 },
             )
@@ -149,7 +174,7 @@ async def submit_rl_script(
         except Exception as e:
             logger.error(
                 f"Failed to upload tar to Supabase {submission_id}: {str(e)}",
-                extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm},
+                extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm, "user_name": name},
             )
             raise HTTPException(500, "Failed to save submission bundle")
 
@@ -177,7 +202,7 @@ async def submit_rl_script(
                     "submission_id": submission_id,
                     "env_id": env_id,
                     "algorithm": algorithm,
-                    "user_id": user_id,
+                    "user_name": name,
                     "client_id": client_id,
                 },
             )
@@ -189,7 +214,7 @@ async def submit_rl_script(
         except Exception as e:
             logger.error(
                 f"Failed to upload to Supabase {submission_id}: {str(e)}",
-                extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm},
+                extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm, "user_name": name},
             )
             raise HTTPException(500, "Failed to save submission")
 
@@ -197,7 +222,7 @@ async def submit_rl_script(
     try:
         submission = Submission(
             id=submission_id,
-            user_id=user_id,
+            user_id=name,
             env_id=env_id,
             algorithm=algorithm,
             status="pending"
@@ -208,7 +233,7 @@ async def submit_rl_script(
     except Exception as e:
         logger.error(
             f"Database error creating submission {submission_id}: {str(e)}",
-            extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm},
+            extra={"submission_id": submission_id, "env_id": env_id, "algorithm": algorithm, "user_name": name},
         )
         raise HTTPException(500, "Failed to create submission record")
 
@@ -219,10 +244,24 @@ async def submit_rl_script(
             "submission_id": submission_id,
             "env_id": env_id,
             "algorithm": algorithm,
-            "user_id": user_id,
+            "user_name": name,
         },
     )
-    evaluate_submission_task.delay(submission_id)
+    # Route task based on environment weight
+    queue_name = _select_queue_for_env(env_id)
+    try:
+        evaluate_submission_task.apply_async(
+            kwargs={
+                "submission_id": submission_id,
+                "name": name,
+                "env_id": env_id,
+                "algorithm": algorithm,
+            },
+            queue=queue_name,
+        )
+    except Exception:
+        # Fallback to default queue if broker lacks route
+        evaluate_submission_task.delay(submission_id)
 
     return {
         "id": submission_id,

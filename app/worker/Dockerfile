@@ -17,3 +17,5 @@ COPY app /home/appuser/app
 USER appuser
 
 # Command will be set in docker-compose
+RUN mkdir -p /home/appuser/prom_metrics && chown -R appuser:appuser /home/appuser/prom_metrics
+ENV PROMETHEUS_MULTIPROC_DIR=/home/appuser/prom_metrics

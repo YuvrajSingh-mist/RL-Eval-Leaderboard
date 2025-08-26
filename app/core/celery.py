@@ -26,7 +26,11 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
-    broker_connection_retry_on_startup=True
+    broker_connection_retry_on_startup=True,
+    task_routes={
+        # Default route for evaluate_submission_task (can be overridden by apply_async)
+        "app.core.celery.evaluate_submission_task": {"queue": "celery"},
+    },
 )
 
 ## Sentry removed; logs flow to Loki via Promtail
@@ -43,7 +47,7 @@ def setup_observability(sender, **kwargs):
     try:
         start_celery_queue_length_collector(
             os.getenv("CELERY_BROKER_URL", "redis://redis:6379/1"),
-            queue_names=["celery"],
+            queue_names=["celery", "heavy"],
             interval_seconds=10,
         )
     except Exception as e:
@@ -134,6 +138,29 @@ def _on_task_retry(request=None, reason=None, einfo=None, **extra_kwargs):
 def evaluate_submission_task(self, submission_id: str):
     """Celery task to evaluate a submission"""
     from app.services.evaluation import evaluate_submission
+    from app.db.session import SessionLocal
+    from app.models import Submission
+    
+    # Get user_id from submission for task metadata
+    db = SessionLocal()
+    try:
+        submission = db.query(Submission).get(submission_id)
+        if submission:
+            # Update task metadata with name and submission details
+            self.update_state(
+                state='STARTED',
+                meta={
+                    'submission_id': submission_id,
+                    'name': submission.user_id,  # user_id field stores the name
+                    'env_id': submission.env_id,
+                    'algorithm': submission.algorithm
+                }
+            )
+    except Exception as e:
+        logging.getLogger(__name__).debug(f"Failed to update task metadata: {str(e)}")
+    finally:
+        db.close()
+    
     try:
         return evaluate_submission(submission_id)
     except Exception as exc:

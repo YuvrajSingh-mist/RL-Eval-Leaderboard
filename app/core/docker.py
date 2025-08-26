@@ -151,6 +151,15 @@ def run_evaluation_container(submission_id: str, env_id: str):
             extra={"submission_id": submission_id, "env_id": env_id, "stage": stage},
         )
         stage = "create_container"
+        use_gpu = os.getenv("EVALUATOR_USE_GPU", "false").lower() in ("1", "true", "yes")
+        device_requests = None
+        if use_gpu:
+            try:
+                from docker.types import DeviceRequest
+                device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
+                logger.info("GPU mode enabled for evaluator", extra={"submission_id": submission_id, "env_id": env_id, "stage": stage})
+            except Exception as _e:
+                logger.warning(f"Failed to enable GPU device requests: {str(_e)}")
         container = client.containers.create(
             command = f"/home/appuser/entrypoint.sh",
             image=settings.EVALUATOR_IMAGE,
@@ -161,12 +170,13 @@ def run_evaluation_container(submission_id: str, env_id: str):
             },
             environment=env_vars,
             network_mode="none",  # No network access
-            mem_limit="512m",     # 512MB memory limit
+            mem_limit="4g",       # Raise memory limit to 7 GB for MuJoCo/envs
             pids_limit=50,        # Max 50 processes
             cpu_quota=50000,      # 50% of one CPU
             security_opt=security_opts,
             cap_drop=["ALL"],     # Drop all capabilities
-            detach=True
+            detach=True,
+            device_requests=device_requests
         )
         logger.info(
             f"Container created: {container.id}",

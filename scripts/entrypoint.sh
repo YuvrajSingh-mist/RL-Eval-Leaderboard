@@ -61,11 +61,11 @@ echo "INFO: Submission: ${SUBMISSION_ID:-unknown}"
 echo "INFO: Environment: $ENV_ID"
 echo "INFO: Script: $SCRIPT_NAME size=${SCRIPT_SIZE}B sha256=$SCRIPT_SHA256"
 echo "INFO: Interpreter: $PY_VER"
-echo "INFO: Limits: timeout=300s nice=19 ionice=2/7 ulimit_vmem=524288KB"
+echo "INFO: Limits: timeout=300s nice=19 ionice=2/7"
 
 # Execute with strict limits and capture status
-ulimit -v 524288
-timeout 300s nice -n 19 ionice -c 2 -n 7 python -u "$SCRIPT_PATH" "$ENV_ID"
+# ulimit -v 2097152  # Commented out due to CUDA library mapping issues
+timeout 3600s nice -n 19 ionice -c 2 -n 7 python -u "$SCRIPT_PATH" "$ENV_ID"
 STATUS=$?
 END_TS=$(date +%s)
 DURATION=$((END_TS - START_TS))

@@ -27,14 +27,15 @@ services:
     env_file: .env
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - SUPABASE_BUCKET=${SUPABASE_BUCKET}
-      - SERVICE_NAME=api
+      - SERVICE_NAME=${SERVICE_NAME}
+      - PROMETHEUS_MULTIPROC_DIR=/home/appuser/prom_metrics
       # Sentry removed; logs go to stdout and Promtail ships to Loki
     depends_on:
       - redis
@@ -62,7 +63,7 @@ services:
       - sh
       - -lc
       - |
-        exec celery -A app.core.celery.celery_app worker --loglevel=info -P prefork -c "$(python -c 'import multiprocessing as m; print(max(1, m.cpu_count()//2))')"
+        exec celery -A app.core.celery.celery_app worker --loglevel=info -P prefork -c 3 -Q celery
     volumes:
       - ./app:/home/appuser/app
       - ./worker:/home/appuser/worker
@@ -70,29 +71,25 @@ services:
     env_file: .env
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - SUPABASE_BUCKET=${SUPABASE_BUCKET}
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - WORKER_METRICS_PORT=9100
-      - PROMETHEUS_MULTIPROC_DIR=/tmp/prom_metrics
-      - SERVICE_NAME=worker
+      - DOCKER_HOST=${DOCKER_HOST}
+      - WORKER_METRICS_PORT=${WORKER_METRICS_PORT}
+      - PROMETHEUS_MULTIPROC_DIR=/home/appuser/prom_metrics
+      - SERVICE_NAME=${SERVICE_NAME}
       # - ALERTMANAGER_SMTP_PASSWORD_FILE=${ALERTMANAGER_SMTP_PASSWORD_FILE}
       - VISITOR_JWT_SECRET=${VISITOR_JWT_SECRET}
     depends_on:
       - api
     networks:
       - rl-net
-    privileged: true
-    user: root
-    tmpfs:
-      - /tmp/prom_metrics:size=64m
     healthcheck:
-      test: ["CMD", "celery", "inspect", "ping", "-A", "app.core.celery"]
+      test: ["CMD", "celery", "-A", "app.core.celery", "inspect", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -100,15 +97,73 @@ services:
       - 8.8.8.8
       - 1.1.1.1
 
-  evaluator:
-    image: rl-evaluator:latest
+  worker-heavy:
     build:
       context: .
-      dockerfile: docker/Dockerfile.evaluator
-    # platform: linux/arm64
+      dockerfile: app/worker/Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    command:
+      - sh
+      - -lc
+      - |
+        exec celery -A app.core.celery.celery_app worker --loglevel=info -P prefork -c 2 -Q heavy,celery
+    volumes:
+      - ./app:/home/appuser/app
+      - ./worker:/home/appuser/worker
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: .env
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - SUPABASE_BUCKET=${SUPABASE_BUCKET}
+      - DOCKER_HOST=${DOCKER_HOST}
+      - WORKER_METRICS_PORT=${WORKER_METRICS_PORT}
+      - PROMETHEUS_MULTIPROC_DIR=/home/appuser/prom_metrics
+      - SERVICE_NAME=${SERVICE_NAME}
+      - VISITOR_JWT_SECRET=${VISITOR_JWT_SECRET}
+    depends_on:
+      - api
+    networks:
+      - rl-net
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.core.celery", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+
+  # evaluator:
+  #   image: rl-evaluator:latest
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.evaluator
+  #   # platform: linux/arm64
+  #   profiles:
+  #     - evaluator
+  evaluator-gpu:
+    image: rl-evaluator-gpu:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.evaluator.gpu
+    # This line is crucial. '4g' is a good starting point.
+    shm_size: '4g' 
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all # 'all' is often simpler than specifying a count
+              capabilities: [gpu]
     profiles:
       - evaluator
-
   frontend:
     build:
       context: .
@@ -119,7 +174,8 @@ services:
     volumes:
       - ./frontend:/home/appuser/frontend
     environment:
-      - API_URL=https://amazing-cleanly-ram.ngrok-free.app
+    # RUN pip install --no-cache-dir torch==2.1.0 --index-url https://download.pytorch.org/whl/cu121
+      - API_URL=${API_URL}
     depends_on:
       - api
     networks:
@@ -133,10 +189,10 @@ services:
   redis-commander:
     image: rediscommander/redis-commander:latest
     environment:
-      - REDIS_HOSTS=broker:redis:6379:1,default:redis:6379:0
-      - HTTP_PORT=8081
-      - REDIS_CONNECTION_MODE=direct
-      - REDIS_PASSWORD=
+      - REDIS_HOSTS=${REDIS_COMMANDER_HOSTS}
+      - HTTP_PORT=${REDIS_COMMANDER_HTTP_PORT}
+      - REDIS_CONNECTION_MODE=${REDIS_CONNECTION_MODE}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     ports:
       - "8081:8081"
     depends_on:
@@ -147,7 +203,7 @@ services:
   redis-exporter:
     image: oliver006/redis_exporter:latest
     environment:
-      - REDIS_ADDR=redis://redis:6379
+      - REDIS_ADDR=${REDIS_ADDR}
     ports:
       - "9121:9121"
     depends_on:
@@ -197,7 +253,7 @@ services:
     command: sh /init/10-create-user.sh
     env_file: .env
     environment:
-      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_URL=${GRAFANA_URL}
     volumes:
       - ./scripts/grafana_user_provision.sh:/init/10-create-user.sh:ro
     depends_on:
@@ -205,6 +261,7 @@ services:
     networks:
       - rl-net
     restart: "no"
+    
   alertmanager:
     image: prom/alertmanager:latest
     command:

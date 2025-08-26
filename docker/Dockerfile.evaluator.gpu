@@ -1,0 +1,62 @@
+# ============================================
+# GPU-enabled evaluator image for RL training
+# ============================================
+
+FROM nvcr.io/nvidia/pytorch:23.12-py3
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ------------------------------------------------
+# Install system dependencies
+# ------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ffmpeg libsm6 libxext6 libgomp1 coreutils util-linux \  
+    build-essential swig \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python already included in base image, just ensure pip is latest
+RUN python3 -m pip install --upgrade pip setuptools wheel
+
+# ------------------------------------------------
+# Install extra Python deps
+# ------------------------------------------------
+RUN pip install --no-cache-dir \
+     pettingzoo supersuit imageio wandb
+
+# ------------------------------------------------
+# Fix CUPTI issue: symlink for libcupti.so.12
+# ------------------------------------------------
+RUN ln -s /usr/local/cuda/extras/CUPTI/lib64/libcupti.so /usr/lib/x86_64-linux-gnu/libcupti.so.12 || true
+
+# ------------------------------------------------
+# Create non-root user
+# ------------------------------------------------
+RUN useradd -m appuser
+WORKDIR /home/appuser
+
+# ------------------------------------------------
+# Copy requirements
+# ------------------------------------------------
+COPY requirements.evaluator.txt ./requirements.txt
+
+# Install Python packages (RL stack requirements)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ------------------------------------------------
+# NVIDIA container runtime env
+# ------------------------------------------------
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# ------------------------------------------------
+# Switch to non-root user
+# ------------------------------------------------
+USER appuser
+
+# ------------------------------------------------
+# Copy entrypoint
+# ------------------------------------------------
+COPY --chown=appuser:appuser scripts/entrypoint.sh /home/appuser/entrypoint.sh
+RUN chmod +x /home/appuser/entrypoint.sh
+
+ENTRYPOINT ["/home/appuser/entrypoint.sh"]

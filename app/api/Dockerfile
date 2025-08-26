@@ -21,6 +21,9 @@ RUN pip install --upgrade pip setuptools wheel && \
 # Copy application code
 COPY app /home/appuser/app
 
+RUN mkdir -p /home/appuser/prom_metrics && chown -R appuser:appuser /home/appuser/prom_metrics
+ENV PROMETHEUS_MULTIPROC_DIR=/home/appuser/prom_metrics
+
 # Switch to non-root user
 USER appuser
 

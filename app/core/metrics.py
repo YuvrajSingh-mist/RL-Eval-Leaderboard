@@ -80,6 +80,122 @@ CELERY_QUEUE_LENGTH = Gauge(
     **_gauge_kwargs,
 )
 
+# System health metrics
+DATABASE_HEALTH = Gauge(
+    "database_health",
+    "Database connection health status (1=healthy, 0=unhealthy)",
+    **_gauge_kwargs,
+)
+
+REDIS_HEALTH = Gauge(
+    "redis_health",
+    "Redis connection health status (1=healthy, 0=unhealthy)",
+    **_gauge_kwargs,
+)
+
+CELERY_WORKER_HEALTH = Gauge(
+    "celery_worker_health",
+    "Celery worker health status (1=healthy, 0=unhealthy)",
+    **_gauge_kwargs,
+)
+
+SUPABASE_STORAGE_HEALTH = Gauge(
+    "supabase_storage_health",
+    "Supabase storage health status (1=healthy, 0=unhealthy)",
+    **_gauge_kwargs,
+)
+
+OVERALL_SYSTEM_HEALTH = Gauge(
+    "overall_system_health",
+    "Overall system health status (1=healthy, 0=unhealthy)",
+    **_gauge_kwargs,
+)
+
+
+def check_database_health():
+    """Check database health and update metrics"""
+    try:
+        from app.db.session import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        DATABASE_HEALTH.set(1)  # Healthy
+        return True
+    except Exception as e:
+        DATABASE_HEALTH.set(0)  # Unhealthy
+        logging.getLogger(__name__).error(f"Database health check failed: {str(e)}")
+        return False
+
+
+def check_redis_health():
+    """Check Redis health and update metrics"""
+    try:
+        import redis
+        from app.core.config import settings
+        r = redis.from_url(settings.REDIS_URL, socket_timeout=2)
+        r.ping()
+        REDIS_HEALTH.set(1)  # Healthy
+        return True
+    except Exception as e:
+        REDIS_HEALTH.set(0)  # Unhealthy
+        logging.getLogger(__name__).error(f"Redis health check failed: {str(e)}")
+        return False
+
+
+def check_celery_worker_health():
+    """Check Celery worker health and update metrics"""
+    try:
+        from app.core.celery import celery_app
+        pongs = celery_app.control.ping(timeout=1.0)
+        if isinstance(pongs, list) and len(pongs) > 0:
+            CELERY_WORKER_HEALTH.set(1)  # Healthy
+            return True
+        else:
+            CELERY_WORKER_HEALTH.set(0)  # Unhealthy
+            logging.getLogger(__name__).error("No Celery workers responding")
+            return False
+    except Exception as e:
+        CELERY_WORKER_HEALTH.set(0)  # Unhealthy
+        logging.getLogger(__name__).error(f"Celery worker health check failed: {str(e)}")
+        return False
+
+
+def check_supabase_storage_health():
+    """Check Supabase storage health and update metrics"""
+    try:
+        from app.core.client import supabase_client
+        from app.core.config import settings
+        bucket = settings.SUPABASE_BUCKET
+        try:
+            supabase_client.storage.from_(bucket).list(path="", limit=1)
+        except TypeError:
+            supabase_client.storage.from_(bucket).list()
+        SUPABASE_STORAGE_HEALTH.set(1)  # Healthy
+        return True
+    except Exception as e:
+        SUPABASE_STORAGE_HEALTH.set(0)  # Unhealthy
+        logging.getLogger(__name__).error(f"Supabase storage health check failed: {str(e)}")
+        return False
+
+
+def check_overall_system_health():
+    """Check all system components and update overall health"""
+    db_ok = check_database_health()
+    redis_ok = check_redis_health()
+    celery_ok = check_celery_worker_health()
+    storage_ok = check_supabase_storage_health()
+    
+    overall_healthy = all([db_ok, redis_ok, celery_ok, storage_ok])
+    OVERALL_SYSTEM_HEALTH.set(1 if overall_healthy else 0)
+    
+    return {
+        "database": db_ok,
+        "redis": redis_ok,
+        "celery_workers": celery_ok,
+        "storage": storage_ok,
+        "overall": overall_healthy
+    }
+
 
 # Environment listing
 ENVIRONMENTS_LIST_REQUESTS_TOTAL = Counter(

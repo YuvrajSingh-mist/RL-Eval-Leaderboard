@@ -9,7 +9,7 @@ from stable_baselines3 import PPO  # type: ignore
 logger = logging.getLogger(__name__)
 
 
-def run_ppo(env_id: str, timesteps: int = 10_000) -> None:
+def run_ppo(env_id: str, timesteps: int = 100) -> None:
     env = gym.make(env_id)
     model = PPO("MlpPolicy", env, verbose=0)
     model.learn(total_timesteps=timesteps)

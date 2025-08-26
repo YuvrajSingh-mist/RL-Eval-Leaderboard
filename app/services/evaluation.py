@@ -120,7 +120,14 @@ def evaluate_submission(submission_id: str) -> dict:
                         "algorithm": submission.algorithm,
                     },
                 )
-            return {"status": "completed", "score": submission.score}
+            return {
+                "status": "completed", 
+                "score": submission.score,
+                "name": submission.user_id,  # user_id field stores the name
+                "submission_id": submission_id,
+                "env_id": submission.env_id,
+                "algorithm": submission.algorithm
+            }
 
         # Evaluation failed
         error_msg = result.get("error") if isinstance(result, dict) else None
@@ -189,7 +196,14 @@ def evaluate_submission(submission_id: str) -> dict:
                 "artifact_cleanup_failed",
                 extra={"submission_id": submission_id, "error": str(e)},
             )
-        return {"status": "error", "message": error_msg}
+        return {
+            "status": "error", 
+            "message": error_msg,
+            "name": submission.user_id,  # user_id field stores the name
+            "submission_id": submission_id,
+            "env_id": submission.env_id,
+            "algorithm": submission.algorithm
+        }
     
     finally:
         # Best-effort artifact cleanup regardless of outcome

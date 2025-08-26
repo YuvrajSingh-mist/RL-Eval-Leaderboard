@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     DOCKER_SOCKET: str = os.getenv("DOCKER_SOCKET", "unix:///var/run/docker.sock")
 
     # Evaluator image
-    EVALUATOR_IMAGE: str = os.getenv("EVALUATOR_IMAGE", "rl-evaluator:latest")
+    EVALUATOR_IMAGE: str = os.getenv("EVALUATOR_IMAGE", "rl-eval-evaluator-gpu:latest")
+    EVALUATOR_USE_GPU: bool = os.getenv("EVALUATOR_USE_GPU", "false").lower() in ("1", "true", "yes")
 
     # Visitor JWT settings (must be provided via env)
     VISITOR_JWT_SECRET: str = os.getenv("VISITOR_JWT_SECRET", "")
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
 
     class Config:
         # Let BaseSettings read from project .env if present (local dev).
-        env_file = ".env"
+        env_file = "../../.env"
 
 
 settings = Settings()

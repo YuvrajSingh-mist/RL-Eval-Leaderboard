@@ -84,6 +84,37 @@ def startup_event():
     except Exception as e:
         logging.getLogger(__name__).warning("failed_to_start_refresh_loop", extra={"error": str(e)})
 
+    # Start background task to monitor all system components
+    try:
+        async def _system_health_loop():
+            import datetime
+            from app.core.metrics import check_overall_system_health
+            while True:
+                try:
+                    health_status = check_overall_system_health()
+                    if not health_status["overall"]:
+                        logging.getLogger(__name__).error(
+                            "system_health_check_failed",
+                            extra={
+                                "health_status": health_status,
+                                "timestamp": datetime.datetime.utcnow().isoformat(),
+                            }
+                        )
+                    else:
+                        logging.getLogger(__name__).info(
+                            "system_health_check_passed",
+                            extra={
+                                "health_status": health_status,
+                                "timestamp": datetime.datetime.utcnow().isoformat(),
+                            }
+                        )
+                except Exception as e:
+                    logging.getLogger(__name__).error("system_health_check_failed", extra={"error": str(e)})
+                await asyncio.sleep(15)  # Check every 15 seconds
+        asyncio.create_task(_system_health_loop())
+    except Exception as e:
+        logging.getLogger(__name__).warning("failed_to_start_system_health_loop", extra={"error": str(e)})
+
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
@@ -161,6 +192,7 @@ def health_check():
     import datetime
     from sqlalchemy import text
     import redis as _redis
+    logger = logging.getLogger(__name__)
 
     statuses: dict[str, str] = {}
     # DB check
@@ -210,6 +242,27 @@ def health_check():
         statuses["storage"] = f"error: {e}"
 
     healthy = all(v == "ok" for v in statuses.values())
+    
+    # Log health status for monitoring
+    if not healthy:
+        logger.error(
+            "health_check_failed",
+            extra={
+                "status": "unhealthy",
+                "components": statuses,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+            }
+        )
+    else:
+        logger.info(
+            "health_check_passed",
+            extra={
+                "status": "healthy",
+                "components": statuses,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+            }
+        )
+    
     return {
         "status": "healthy" if healthy else "unhealthy",
         "components": statuses,

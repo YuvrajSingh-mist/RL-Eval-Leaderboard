@@ -95,6 +95,96 @@ groups:
           summary: Redis is down
           description: redis_exporter reports the Redis instance is unreachable.
 
+      - alert: DatabaseDown
+        expr: database_health == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: Database connection is down
+          description: Database health check failed for 30 seconds. This will prevent task processing and leaderboard updates.
+
+      - alert: DatabaseConnectionError
+        expr: database_health == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Database connection error persisting
+          description: Database has been down for 5 minutes. Immediate attention required - tasks cannot be processed.
+
+      - alert: RedisConnectionDown
+        expr: redis_health == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: Redis connection is down
+          description: Redis health check failed for 30 seconds. This will affect leaderboard and task processing.
+
+      - alert: RedisConnectionError
+        expr: redis_health == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Redis connection error persisting
+          description: Redis has been down for 5 minutes. Leaderboard and task processing will be affected.
+
+      - alert: CeleryWorkerDown
+        expr: celery_worker_health == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: Celery workers are down
+          description: No Celery workers responding for 30 seconds. Task processing has stopped.
+
+      - alert: CeleryWorkerError
+        expr: celery_worker_health == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Celery worker error persisting
+          description: Celery workers have been down for 5 minutes. No tasks can be processed.
+
+      - alert: SupabaseStorageDown
+        expr: supabase_storage_health == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: Supabase storage is down
+          description: Supabase storage health check failed for 30 seconds. File uploads/downloads will fail.
+
+      - alert: SupabaseStorageError
+        expr: supabase_storage_health == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Supabase storage error persisting
+          description: Supabase storage has been down for 5 minutes. File operations will fail.
+
+      - alert: OverallSystemDown
+        expr: overall_system_health == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: Overall system health check failed
+          description: One or more critical system components are down. Immediate attention required.
+
+      - alert: SystemHealthDegraded
+        expr: overall_system_health == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: System health degraded for extended period
+          description: System has been unhealthy for 5 minutes. Service quality is severely impacted.
+
       - alert: RedisMemoryHigh
         expr: redis_memory_max_bytes > 0 and (redis_memory_used_bytes / redis_memory_max_bytes) > 0.9
         for: 2m

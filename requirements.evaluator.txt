@@ -4,4 +4,9 @@ stable-baselines3
 cloudpickle
 matplotlib
 pandas
-
+swig
+# gymnasium-box2d
+gymnasium[box2d]
+ale-py
+gymnasium[mujoco]
+gymnasium[classic-control]

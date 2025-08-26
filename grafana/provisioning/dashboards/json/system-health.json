@@ -1,0 +1,214 @@
+{
+  "id": null,
+  "uid": "system-health",
+  "title": "System Health Monitoring",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Overall System Health",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "overall_system_health", "legendFormat": "System Health"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "UNHEALTHY"}}, "type": "value"},
+            {"options": {"1": {"text": "HEALTHY"}}, "type": "value"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Database Health",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "database_health", "legendFormat": "Database"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Redis Health",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "redis_health", "legendFormat": "Redis"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Celery Worker Health",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "celery_worker_health", "legendFormat": "Celery Workers"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Supabase Storage Health",
+      "gridPos": {"x": 0, "y": 4, "w": 6, "h": 4},
+      "targets": [
+        {"expr": "supabase_storage_health", "legendFormat": "Storage"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "graph",
+      "title": "System Health Timeline",
+      "gridPos": {"x": 6, "y": 4, "w": 18, "h": 8},
+      "targets": [
+        {"expr": "overall_system_health", "legendFormat": "Overall"},
+        {"expr": "database_health", "legendFormat": "Database"},
+        {"expr": "redis_health", "legendFormat": "Redis"},
+        {"expr": "celery_worker_health", "legendFormat": "Celery"},
+        {"expr": "supabase_storage_health", "legendFormat": "Storage"}
+      ],
+      "yAxes": [
+        {
+          "min": 0,
+          "max": 1,
+          "ticks": {
+            "values": [0, 1]
+          }
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Health Check Failures (last 1 hour)",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum(rate(up{job=\"api\"}[5m]))", "legendFormat": "API Up"},
+        {"expr": "sum(rate(up{job=\"celery_worker\"}[5m]))", "legendFormat": "Worker Up"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Celery Queue Length",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "celery_queue_length", "legendFormat": "Queue Length"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Evaluation Success Rate",
+      "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum(rate(evaluation_completed_total[5m])) / (sum(rate(evaluation_completed_total[5m])) + sum(rate(evaluation_failed_total[5m]))) * 100", "legendFormat": "Success Rate %"}
+      ],
+      "yAxes": [
+        {
+          "min": 0,
+          "max": 100,
+          "unit": "percent"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "System Response Time",
+      "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"api\"}[5m])) by (le))", "legendFormat": "API p95"},
+        {"expr": "histogram_quantile(0.95, sum(rate(evaluation_duration_seconds_bucket[5m])) by (le))", "legendFormat": "Evaluation p95"}
+      ]
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "annotations": {
+    "list": []
+  }
+}
