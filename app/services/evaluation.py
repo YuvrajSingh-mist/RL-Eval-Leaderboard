@@ -141,6 +141,7 @@ def evaluate_submission(submission_id: str) -> dict:
             error_msg = f"{error_msg} | logs_tail=\n{logs_tail}"
 
         submission.status = "failed"
+        submission.score = -1000000.0  # Default negative score for failed submissions
         submission.error = error_msg[:2000]
         logger.error(
             f"Evaluation failed for {submission_id}: {error_msg}",
@@ -153,6 +154,20 @@ def evaluate_submission(submission_id: str) -> dict:
 
         # Commit final status
         db.commit()
+        
+        # Add failed submission to leaderboard with negative score
+        try:
+            redis_leaderboard.add_submission(submission)
+        except Exception as e:
+            logger.error(
+                f"Failed to update Redis leaderboard for failed submission {submission_id}: {str(e)}",
+                extra={
+                    "submission_id": submission_id,
+                    "env_id": submission.env_id,
+                    "algorithm": submission.algorithm,
+                },
+            )
+        
         try:
             EVALUATION_FAILED_TOTAL.labels(reason="script_error").inc()
             EVALUATION_DURATION_SECONDS.labels(env_id=submission.env_id).observe(timer.seconds)
@@ -181,8 +196,18 @@ def evaluate_submission(submission_id: str) -> dict:
                 submission = db.query(Submission).get(submission_id)
                 if submission:
                     submission.status = "failed"
+                    submission.score = -1000000.0  # Default negative score for system errors
                     submission.error = f"System error: {error_msg[:500]}"
                     db.commit()
+                    
+                    # Add failed submission to leaderboard
+                    try:
+                        redis_leaderboard.add_submission(submission)
+                    except Exception as lb_error:
+                        logger.error(
+                            f"Failed to update Redis leaderboard for system error submission {submission_id}: {str(lb_error)}",
+                            extra={"submission_id": submission_id},
+                        )
             except Exception as db_error:
                 logger.error(
                     f"Failed to update DB after error: {str(db_error)}",

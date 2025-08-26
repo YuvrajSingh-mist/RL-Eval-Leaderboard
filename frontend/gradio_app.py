@@ -348,8 +348,8 @@ with gr.Blocks(title="SimpleRL Leaderboard", css="""
                 user_filter = gr.Textbox(label="User contains", placeholder="e.g., alice")
                 algorithm_filter = gr.Textbox(label="Algorithm contains", placeholder="e.g., DQN")
             with gr.Row():
-                score_min = gr.Number(label="Min score")
-                score_max = gr.Number(label="Max score", value=100)
+                score_min = gr.Number(label="Min score", value=-1000)
+                score_max = gr.Number(label="Max score", value=1000)
                 sort_order = gr.Dropdown(
                     label="Sort order",
                     choices=["Score (desc)", "Date (newest)", "Date (oldest)"],

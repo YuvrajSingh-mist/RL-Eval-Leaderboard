@@ -120,11 +120,11 @@ class RedisLeaderboard:
                 logger.debug("db_close_failed_after_warm", extra={"error": str(e)})
     
     def add_submission(self, submission: Submission):
-        """Add submission to leaderboard when completed"""
+        """Add submission to leaderboard when completed or failed"""
         if not self.redis_client:
             self.connect()
             
-        if submission.status != "completed" or submission.score is None:
+        if submission.score is None:
             return
             
         try:
