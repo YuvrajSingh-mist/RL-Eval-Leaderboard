@@ -172,7 +172,7 @@ def run_evaluation_container(submission_id: str, env_id: str):
             network_mode="none",  # No network access
             mem_limit="4g",       # Raise memory limit to 7 GB for MuJoCo/envs
             pids_limit=50,        # Max 50 processes
-            cpu_quota=50000,      # 50% of one CPU
+            # cpu_quota=50000,      # 50% of one CPU
             security_opt=security_opts,
             cap_drop=["ALL"],     # Drop all capabilities
             detach=True,

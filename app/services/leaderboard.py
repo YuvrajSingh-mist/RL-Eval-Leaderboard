@@ -299,7 +299,23 @@ class RedisLeaderboard:
 
                     rows = q.limit(limit).all()
                     result = []
+                    
+                    # Reassign medals based on the filtered/sorted results to ensure consecutive appearance
+                    medal_count = 0
                     for i, row in enumerate(rows):
+                        # Assign medals consecutively to the first 3 valid scores in the filtered results
+                        medal = None
+                        if row.score is not None and row.score > 0:
+                            if medal_count == 0:
+                                medal = 'gold'
+                                medal_count += 1
+                            elif medal_count == 1:
+                                medal = 'silver'
+                                medal_count += 1
+                            elif medal_count == 2:
+                                medal = 'bronze'
+                                medal_count += 1
+                        
                         result.append({
                             'rank': i + 1,
                             'id': row.id,
@@ -308,7 +324,7 @@ class RedisLeaderboard:
                             'score': float(row.score),
                             'created_at': row.created_at.isoformat(),
                             'env_id': row.env_id,
-                            'medal': top3_medal_map.get(row.id),
+                            'medal': medal,
                         })
                     return result
                 except Exception as e:
@@ -409,8 +425,25 @@ class RedisLeaderboard:
             # Cap to limit and build response
             pruned = entries[:limit]
             result = []
+            
+            # Reassign medals based on the filtered/sorted results to ensure consecutive appearance
+            medal_count = 0
             for i, e in enumerate(pruned):
                 created_str = e['created_at'].isoformat() if e['created_at'] else None
+                
+                # Assign medals consecutively to the first 3 valid scores in the filtered results
+                medal = None
+                if e['score'] is not None and e['score'] > 0:
+                    if medal_count == 0:
+                        medal = 'gold'
+                        medal_count += 1
+                    elif medal_count == 1:
+                        medal = 'silver'
+                        medal_count += 1
+                    elif medal_count == 2:
+                        medal = 'bronze'
+                        medal_count += 1
+                
                 result.append({
                     'rank': i + 1,
                     'id': e['id'],
@@ -419,7 +452,7 @@ class RedisLeaderboard:
                     'score': float(e['score']) if e['score'] is not None else None,
                     'created_at': created_str,
                     'env_id': e['env_id'],
-                    'medal': top3_medal_map.get(e['id']),
+                    'medal': medal,
                 })
             return result
             
