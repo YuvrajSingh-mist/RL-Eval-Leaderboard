@@ -35,7 +35,8 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - SUPABASE_BUCKET=${SUPABASE_BUCKET}
       - SERVICE_NAME=${SERVICE_NAME}
-      - PROMETHEUS_MULTIPROC_DIR=/home/appuser/prom_metrics
+      # Disable multiprocess mode for API since it runs as single process
+      # - PROMETHEUS_MULTIPROC_DIR=/home/appuser/prom_metrics
       # Sentry removed; logs go to stdout and Promtail ships to Loki
     depends_on:
       - redis

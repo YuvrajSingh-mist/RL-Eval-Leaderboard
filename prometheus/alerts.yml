@@ -68,18 +68,27 @@ groups:
 
   - name: infrastructure
     rules:
-      - alert: BlackboxProbeFail
-        expr: probe_success == 0
-        for: 15s
+      - alert: BlackboxProbeFailCritical
+        expr: probe_success{job="blackbox_http"} == 0
+        for: 1m
         labels:
           severity: critical
         annotations:
-          summary: Blackbox probe failed
-          description: 'HTTP probe failed for {{ $labels.instance }}.'
+          summary: Blackbox probe failed (critical target)
+          description: 'HTTP probe failed for critical target {{ $labels.instance }}.'
+
+      - alert: BlackboxProbeFailWarning
+        expr: probe_success{job="blackbox_http_aux"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Blackbox probe failed (auxiliary target)
+          description: 'HTTP probe failed for auxiliary target {{ $labels.instance }}. Investigate if persistent.'
 
       - alert: APIHealthCheckFail
         expr: probe_success{instance="http://api:8000/health"} == 0
-        for: 10s
+        for: 1m
         labels:
           severity: critical
         annotations:
@@ -88,7 +97,7 @@ groups:
 
       - alert: RedisExporterTargetDown
         expr: up{job="redis"} == 0
-        for: 20s
+        for: 40s
         labels:
           severity: critical
         annotations:
@@ -97,7 +106,7 @@ groups:
 
       - alert: RedisDown
         expr: redis_up == 0
-        for: 20s
+        for: 40s
         labels:
           severity: critical
         annotations:
@@ -106,7 +115,7 @@ groups:
 
       - alert: DatabaseDown
         expr: database_health == 0
-        for: 30s
+        for: 20s
         labels:
           severity: critical
         annotations:
@@ -115,7 +124,7 @@ groups:
 
       - alert: DatabaseConnectionError
         expr: database_health == 0
-        for: 5m
+        for: 2m
         labels:
           severity: critical
         annotations:
@@ -151,7 +160,7 @@ groups:
 
       - alert: CeleryWorkerError
         expr: celery_worker_health == 0
-        for: 5m
+        for: 2m
         labels:
           severity: critical
         annotations:
@@ -169,7 +178,7 @@ groups:
 
       - alert: CeleryWorkerStuck
         expr: celery_active_tasks > 5
-        for: 5m
+        for: 2m
         labels:
           severity: warning
         annotations:
@@ -187,7 +196,7 @@ groups:
 
       - alert: SupabaseStorageError
         expr: supabase_storage_health == 0
-        for: 5m
+        for: 2m
         labels:
           severity: critical
         annotations:
@@ -205,7 +214,7 @@ groups:
 
       - alert: SystemHealthDegraded
         expr: overall_system_health == 0
-        for: 5m
+        for: 2m
         labels:
           severity: critical
         annotations:

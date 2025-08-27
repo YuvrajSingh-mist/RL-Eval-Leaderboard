@@ -7,6 +7,14 @@ from prometheus_client import Counter, Histogram, Gauge, start_http_server
 from threading import Thread, Event
 import redis as redis_lib
 
+# Ensure Prometheus multiprocess directory exists if needed
+mp_dir = os.getenv("PROMETHEUS_MULTIPROC_DIR")
+if mp_dir:
+    try:
+        os.makedirs(mp_dir, exist_ok=True)
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Failed to create Prometheus multiprocess directory {mp_dir}: {e}")
+
 
 # ----------
 # Core metrics
@@ -70,9 +78,9 @@ LEADERBOARD_QUERY_DURATION_SECONDS = Histogram(
 )
 
 # Celery queue backlog
-# In multiprocess mode, Gauges must declare an aggregation strategy.
-_is_mp = bool(os.getenv("PROMETHEUS_MULTIPROC_DIR"))
-_gauge_kwargs = {"multiprocess_mode": "max"} if _is_mp else {}
+# Temporarily disable multiprocess mode to fix startup issues
+_is_mp = False  # bool(os.getenv("PROMETHEUS_MULTIPROC_DIR"))
+_gauge_kwargs = {}  # {"multiprocess_mode": "max"} if _is_mp else {}
 CELERY_QUEUE_LENGTH = Gauge(
     "celery_queue_length",
     "Length of Celery broker queue in Redis",
@@ -102,6 +110,7 @@ CELERY_WORKER_HEALTH = Gauge(
 CELERY_WORKER_COUNT = Gauge(
     "celery_worker_count",
     "Number of active Celery workers",
+    labelnames=("queue",),
     **_gauge_kwargs,
 )
 
@@ -198,8 +207,24 @@ def check_celery_worker_health():
         total_active = sum(len(tasks) for tasks in (active.values() if active else []))
         total_reserved = sum(len(tasks) for tasks in (reserved.values() if reserved else []))
         
-        # Update metrics
-        CELERY_WORKER_COUNT.set(worker_count)
+        # Update metrics - track workers by queue
+        # Reset all queue worker counts first
+        CELERY_WORKER_COUNT.labels(queue="celery").set(0)
+        CELERY_WORKER_COUNT.labels(queue="heavy").set(0)
+        
+        # Count workers by queue based on their configuration
+        celery_workers = 0
+        heavy_workers = 0
+        
+        for worker_name, worker_stats in stats.items():
+            # Check if worker can handle heavy queue (has both queues or heavy queue)
+            if 'heavy' in worker_stats.get('pool', {}).get('queues', []) or 'heavy' in worker_name.lower():
+                heavy_workers += 1
+            else:
+                celery_workers += 1
+        
+        CELERY_WORKER_COUNT.labels(queue="celery").set(celery_workers)
+        CELERY_WORKER_COUNT.labels(queue="heavy").set(heavy_workers)
         CELERY_ACTIVE_TASKS.set(total_active)
         CELERY_RESERVED_TASKS.set(total_reserved)
         
@@ -272,10 +297,21 @@ def init_fastapi_instrumentation(app) -> None:
     """
     try:
         from prometheus_fastapi_instrumentator import Instrumentator  # type: ignore
+        from prometheus_client import CollectorRegistry, multiprocess
     except Exception as e:
         logging.getLogger(__name__).warning("fastapi_instrumentator_unavailable", extra={"error": str(e)})
         return
-    instrumentator = Instrumentator()
+    
+    # Check if we're in multiprocess mode
+    mp_dir = os.getenv("PROMETHEUS_MULTIPROC_DIR")
+    if mp_dir:
+        # Use multiprocess collector
+        registry = CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry)
+        instrumentator = Instrumentator(registry=registry)
+    else:
+        instrumentator = Instrumentator()
+    
     instrumentator.instrument(app)
     instrumentator.expose(app, include_in_schema=False)
 
@@ -346,6 +382,29 @@ def start_celery_queue_length_collector(
             except Exception as e:
                 client = None
                 logging.getLogger(__name__).debug("queue_length_loop_error", extra={"error": str(e)})
+            finally:
+                stop_event.wait(interval_seconds)
+
+    t = Thread(target=_run, daemon=True)
+    t.start()
+    return stop_event
+
+
+def start_health_metrics_collector(interval_seconds: int = 30):
+    """Periodically collect health metrics and export as gauges.
+
+    Returns a stop_event that can be set() to stop the collector.
+    """
+    stop_event: Event = Event()
+
+    def _run():
+        while not stop_event.is_set():
+            try:
+                # Update all health metrics
+                check_overall_system_health()
+                logging.getLogger(__name__).debug("Health metrics updated successfully")
+            except Exception as e:
+                logging.getLogger(__name__).error(f"Health metrics collection failed: {str(e)}")
             finally:
                 stop_event.wait(interval_seconds)
 

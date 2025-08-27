@@ -8,22 +8,47 @@
   "refresh": "10s",
   "panels": [
     {
-      "type": "stat",
-      "title": "Overall System Health",
-      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "type": "timeseries",
+      "title": "Overall System Health Timeline",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
       "targets": [
         {"expr": "overall_system_health", "legendFormat": "System Health"}
       ],
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
-          "thresholds": {
-            "steps": [
-              {"color": "red", "value": 0},
-              {"color": "green", "value": 1}
-            ]
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
           },
           "unit": "short",
           "mappings": [
@@ -31,215 +56,7 @@
             {"options": {"1": {"text": "HEALTHY"}}, "type": "value"}
           ]
         }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Database Health",
-      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
-      "targets": [
-        {"expr": "database_health", "legendFormat": "Database"}
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "red", "value": 0},
-              {"color": "green", "value": 1}
-            ]
-          },
-          "unit": "short",
-          "mappings": [
-            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
-            {"options": {"1": {"text": "UP"}}, "type": "value"}
-          ]
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Redis Health",
-      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
-      "targets": [
-        {"expr": "redis_health", "legendFormat": "Redis"}
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "red", "value": 0},
-              {"color": "green", "value": 1}
-            ]
-          },
-          "unit": "short",
-          "mappings": [
-            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
-            {"options": {"1": {"text": "UP"}}, "type": "value"}
-          ]
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Celery Worker Health",
-      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
-      "targets": [
-        {"expr": "celery_worker_health", "legendFormat": "Celery Workers"}
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "red", "value": 0},
-              {"color": "green", "value": 1}
-            ]
-          },
-          "unit": "short",
-          "mappings": [
-            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
-            {"options": {"1": {"text": "UP"}}, "type": "value"}
-          ]
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Active Workers",
-      "gridPos": {"x": 0, "y": 8, "w": 6, "h": 4},
-      "targets": [
-        {"expr": "celery_worker_count", "legendFormat": "Workers"}
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "red", "value": 0},
-              {"color": "orange", "value": 1},
-              {"color": "green", "value": 2}
-            ]
-          },
-          "unit": "short"
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Active Tasks",
-      "gridPos": {"x": 6, "y": 8, "w": 6, "h": 4},
-      "targets": [
-        {"expr": "celery_active_tasks", "legendFormat": "Active"}
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "green", "value": 0},
-              {"color": "orange", "value": 3},
-              {"color": "red", "value": 5}
-            ]
-          },
-          "unit": "short"
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Reserved Tasks",
-      "gridPos": {"x": 12, "y": 8, "w": 6, "h": 4},
-      "targets": [
-        {"expr": "celery_reserved_tasks", "legendFormat": "Queued"}
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "green", "value": 0},
-              {"color": "orange", "value": 5},
-              {"color": "red", "value": 10}
-            ]
-          },
-          "unit": "short"
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Worker Load",
-      "gridPos": {"x": 18, "y": 8, "w": 6, "h": 4},
-      "targets": [
-        {"expr": "celery_active_tasks + celery_reserved_tasks", "legendFormat": "Total Tasks"}
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "green", "value": 0},
-              {"color": "orange", "value": 10},
-              {"color": "red", "value": 20}
-            ]
-          },
-          "unit": "short"
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Supabase Storage Health",
-      "gridPos": {"x": 0, "y": 4, "w": 6, "h": 4},
-      "targets": [
-        {"expr": "supabase_storage_health", "legendFormat": "Storage"}
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "red", "value": 0},
-              {"color": "green", "value": 1}
-            ]
-          },
-          "unit": "short",
-          "mappings": [
-            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
-            {"options": {"1": {"text": "UP"}}, "type": "value"}
-          ]
-        }
-      }
-    },
-    {
-      "type": "graph",
-      "title": "System Health Timeline",
-      "gridPos": {"x": 6, "y": 4, "w": 18, "h": 8},
-      "targets": [
-        {"expr": "overall_system_health", "legendFormat": "Overall"},
-        {"expr": "database_health", "legendFormat": "Database"},
-        {"expr": "redis_health", "legendFormat": "Redis"},
-        {"expr": "celery_worker_health", "legendFormat": "Celery"},
-        {"expr": "supabase_storage_health", "legendFormat": "Storage"}
-      ],
+      },
       "yAxes": [
         {
           "min": 0,
@@ -251,32 +68,336 @@
       ]
     },
     {
-      "type": "graph",
-      "title": "Health Check Failures (last 1 hour)",
-      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "type": "timeseries",
+      "title": "Database Health Timeline",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
       "targets": [
-        {"expr": "sum(rate(up{job=\"api\"}[5m]))", "legendFormat": "API Up"},
-        {"expr": "sum(rate(up{job=\"celery_worker\"}[5m]))", "legendFormat": "Worker Up"}
-      ]
-    },
-    {
-      "type": "graph",
-      "title": "Celery Queue Length",
-      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
-      "targets": [
-        {"expr": "celery_queue_length", "legendFormat": "Queue Length"}
-      ]
-    },
-    {
-      "type": "graph",
-      "title": "Celery Worker Metrics",
-      "gridPos": {"x": 0, "y": 28, "w": 24, "h": 8},
-      "targets": [
-        {"expr": "celery_worker_count", "legendFormat": "Active Workers"},
-        {"expr": "celery_active_tasks", "legendFormat": "Active Tasks"},
-        {"expr": "celery_reserved_tasks", "legendFormat": "Reserved Tasks"},
-        {"expr": "celery_active_tasks + celery_reserved_tasks", "legendFormat": "Total Tasks"}
+        {"expr": "database_health", "legendFormat": "Database"}
       ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        }
+      },
+      "yAxes": [
+        {
+          "min": 0,
+          "max": 1,
+          "ticks": {
+            "values": [0, 1]
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Redis Health Timeline",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "redis_health", "legendFormat": "Redis"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        }
+      },
+      "yAxes": [
+        {
+          "min": 0,
+          "max": 1,
+          "ticks": {
+            "values": [0, 1]
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Celery Worker Health Timeline",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "celery_worker_health", "legendFormat": "Celery Workers"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        }
+      },
+      "yAxes": [
+        {
+          "min": 0,
+          "max": 1,
+          "ticks": {
+            "values": [0, 1]
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Supabase Storage Health Timeline",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "supabase_storage_health", "legendFormat": "Storage"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          },
+          "unit": "short",
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        }
+      },
+      "yAxes": [
+        {
+          "min": 0,
+          "max": 1,
+          "ticks": {
+            "values": [0, 1]
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Celery Workers by Queue (Light vs Heavy)",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "celery_worker_count{queue=\"celery\"}", "legendFormat": "Light Work Queue Workers"},
+        {"expr": "celery_worker_count{queue=\"heavy\"}", "legendFormat": "Heavy Work Queue Workers"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            }
+          },
+          "unit": "short"
+        }
+      },
+      "yAxes": [
+        {
+          "min": 0,
+          "max": 3,
+          "ticks": {
+            "values": [0, 1, 2, 3]
+          },
+          "unit": "short"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Celery Queue Lengths (Light vs Heavy)",
+      "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "celery_queue_length{queue_name=\"celery\"}", "legendFormat": "Light Work Queue Length"},
+        {"expr": "celery_queue_length{queue_name=\"heavy\"}", "legendFormat": "Heavy Work Queue Length"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            }
+          },
+          "unit": "short"
+        }
+      },
       "yAxes": [
         {
           "min": 0,
@@ -285,12 +406,98 @@
       ]
     },
     {
-      "type": "graph",
-      "title": "Evaluation Success Rate",
-      "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+      "type": "timeseries",
+      "title": "Celery Worker Performance Metrics",
+      "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
       "targets": [
-        {"expr": "sum(rate(evaluation_completed_total[5m])) / (sum(rate(evaluation_completed_total[5m])) + sum(rate(evaluation_failed_total[5m]))) * 100", "legendFormat": "Success Rate %"}
+        {"expr": "celery_worker_count{queue=\"celery\"}", "legendFormat": "Light Queue Workers"},
+        {"expr": "celery_worker_count{queue=\"heavy\"}", "legendFormat": "Heavy Queue Workers"},
+        {"expr": "celery_active_tasks", "legendFormat": "Active Tasks"},
+        {"expr": "celery_reserved_tasks", "legendFormat": "Reserved Tasks"},
+        {"expr": "celery_active_tasks + celery_reserved_tasks", "legendFormat": "Total Tasks"}
       ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            }
+          },
+          "unit": "short"
+        }
+      },
+      "yAxes": [
+        {
+          "min": 0,
+          "unit": "short"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "System Uptime (Last Hour)",
+      "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "avg_over_time(overall_system_health[1h]) * 100", "legendFormat": "Overall Uptime %"},
+        {"expr": "avg_over_time(database_health[1h]) * 100", "legendFormat": "Database Uptime %"},
+        {"expr": "avg_over_time(redis_health[1h]) * 100", "legendFormat": "Redis Uptime %"},
+        {"expr": "avg_over_time(celery_worker_health[1h]) * 100", "legendFormat": "Workers Uptime %"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            }
+          },
+          "unit": "percent",
+          "decimals": 1
+        }
+      },
       "yAxes": [
         {
           "min": 0,
@@ -300,12 +507,50 @@
       ]
     },
     {
-      "type": "graph",
-      "title": "System Response Time",
-      "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+      "type": "timeseries",
+      "title": "Evaluation Success Rate",
+      "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
       "targets": [
-        {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"api\"}[5m])) by (le))", "legendFormat": "API p95"},
-        {"expr": "histogram_quantile(0.95, sum(rate(evaluation_duration_seconds_bucket[5m])) by (le))", "legendFormat": "Evaluation p95"}
+        {"expr": "sum(rate(evaluation_completed_total[5m])) / (sum(rate(evaluation_completed_total[5m])) + sum(rate(evaluation_failed_total[5m]))) * 100", "legendFormat": "Success Rate %"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            }
+          },
+          "unit": "percent"
+        }
+      },
+      "yAxes": [
+        {
+          "min": 0,
+          "max": 100,
+          "unit": "percent"
+        }
       ]
     }
   ],

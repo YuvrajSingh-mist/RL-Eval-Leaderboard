@@ -20,10 +20,15 @@ def _redis():
     return _r
 
 # Prometheus gauges for uniques (single-process safe)
-UNIQUE_VISITORS_TODAY = Gauge("unique_visitors_today", "Approx unique visitors today (JWT)")
-UNIQUE_VISITORS_7D = Gauge("unique_visitors_7d", "Approx unique visitors over last 7 days (JWT)")
-UNIQUE_VISITORS_ALLTIME = Gauge("unique_visitors_alltime", "All-time unique visitors (JWT)")
-UNIQUE_VISITORS_MONTH = Gauge("unique_visitors_month", "Unique visitors by month (JWT)", labelnames=("month",))
+# Use same configuration as other metrics
+import os
+_is_mp = False  # bool(os.getenv("PROMETHEUS_MULTIPROC_DIR"))
+_gauge_kwargs = {}  # {"multiprocess_mode": "max"} if _is_mp else {}
+
+UNIQUE_VISITORS_TODAY = Gauge("unique_visitors_today", "Approx unique visitors today (JWT)", **_gauge_kwargs)
+UNIQUE_VISITORS_7D = Gauge("unique_visitors_7d", "Approx unique visitors over last 7 days (JWT)", **_gauge_kwargs)
+UNIQUE_VISITORS_ALLTIME = Gauge("unique_visitors_alltime", "All-time unique visitors (JWT)", **_gauge_kwargs)
+UNIQUE_VISITORS_MONTH = Gauge("unique_visitors_month", "Unique visitors by month (JWT)", labelnames=("month",), **_gauge_kwargs)
 
 def _hll_key(d: dt.date) -> str:
     return f"hll:visitors:{d.isoformat()}"
@@ -141,19 +146,24 @@ def refresh_unique_visitor_metrics() -> None:
     try:
         today = dt.date.today()
         keys7 = [_hll_key(today - dt.timedelta(days=i)) for i in range(7)]
-        UNIQUE_VISITORS_TODAY.set(float(_redis().pfcount(_hll_key(today))))
-        UNIQUE_VISITORS_7D.set(float(_redis().pfcount(*keys7)))
-
-        # All-time
-        try:
-            UNIQUE_VISITORS_ALLTIME.set(float(_redis().pfcount(_HLL_ALLTIME_KEY)))
-        except Exception as e:
-            logger.debug("visitor_alltime_metric_refresh_failed", extra={"error": str(e)})
+        
+        # Get counts from Redis
+        today_count = _redis().pfcount(_hll_key(today))
+        week_count = _redis().pfcount(*keys7)
+        alltime_count = _redis().pfcount(_HLL_ALLTIME_KEY)
+        
+        # Set Prometheus metrics
+        UNIQUE_VISITORS_TODAY.set(float(today_count))
+        UNIQUE_VISITORS_7D.set(float(week_count))
+        UNIQUE_VISITORS_ALLTIME.set(float(alltime_count))
+        
+        logger.info("visitor_metrics_refreshed", extra={
+            "today_count": today_count,
+            "week_count": week_count,
+            "alltime_count": alltime_count
+        })
 
         # Per-month for last 13 months (current + 12 back)
-        for i in range(13):
-            d = (today.replace(day=1) - dt.timedelta(days=1)) if i == 1 and today.day == 1 else None
-        # Simpler: iterate months by stepping back month-by-month
         m = today.replace(day=1)
         for _ in range(13):
             key = _hll_month_key(m)

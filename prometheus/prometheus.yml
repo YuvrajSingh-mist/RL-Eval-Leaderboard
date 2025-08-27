@@ -30,11 +30,25 @@ scrape_configs:
     static_configs:
       - targets:
           - http://api:8000/health
-          - http://frontend:7860
           - http://prometheus:9090/-/ready
           - http://alertmanager:9093/-/ready
-          - http://grafana:3000/login
           - http://loki:3100/ready
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: blackbox_http_aux
+    metrics_path: /probe
+    params:
+      module: [http_2xx_3xx]
+    static_configs:
+      - targets:
+          - http://frontend:7860
+          - http://grafana:3000/login
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

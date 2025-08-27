@@ -2,17 +2,19 @@
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from app.api import submissions, leaderboard
 from app.api import alerts
 from app.api import visitor
 from app.db.session import init_db
 from app.core.config import settings
 from app.services.leaderboard import redis_leaderboard
-from app.core.metrics import init_fastapi_instrumentation
+from app.core.metrics import init_fastapi_instrumentation, OVERALL_SYSTEM_HEALTH, DATABASE_HEALTH, REDIS_HEALTH, CELERY_WORKER_HEALTH, SUPABASE_STORAGE_HEALTH
 from app.core.logging_config import setup_logging
 import logging
 import os
 import asyncio
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 # Configure logging (JSON)
 setup_logging()
@@ -32,6 +34,18 @@ try:
 except Exception as _e:
     logging.getLogger(__name__).exception("Prometheus metrics init failed", extra={"error": str(_e)})
 
+# Custom metrics endpoint that includes both FastAPI and custom metrics
+@app.get("/metrics")
+async def metrics():
+    """Custom metrics endpoint that combines FastAPI metrics with our custom health metrics"""
+    try:
+        # Generate metrics from prometheus_client (includes our custom metrics)
+        metrics_data = generate_latest()
+        return Response(content=metrics_data, media_type=CONTENT_TYPE_LATEST)
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Failed to generate metrics: {str(e)}")
+        return Response(content="", status_code=500)
+
 # CORS for cross-origin frontend (e.g., Render-hosted Gradio)
 _cors_origins_env = os.getenv("CORS_ORIGINS", "*")
 _cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
@@ -46,7 +60,7 @@ app.add_middleware(
 
 # Initialize database, Redis, and metrics
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     # Initialize database (non-fatal)
     try:
         init_db()
@@ -81,6 +95,7 @@ def startup_event():
                     logging.getLogger(__name__).debug("visitor_metrics_refresh_loop_error", extra={"error": str(e)})
                 await asyncio.sleep(30)
         asyncio.create_task(_refresh_loop())
+        logger.info("Visitor metrics refresh loop started")
     except Exception as e:
         logging.getLogger(__name__).warning("failed_to_start_refresh_loop", extra={"error": str(e)})
 
@@ -112,8 +127,16 @@ def startup_event():
                     logging.getLogger(__name__).error("system_health_check_failed", extra={"error": str(e)})
                 await asyncio.sleep(15)  # Check every 15 seconds
         asyncio.create_task(_system_health_loop())
+        logger.info("System health monitoring loop started")
     except Exception as e:
         logging.getLogger(__name__).warning("failed_to_start_system_health_loop", extra={"error": str(e)})
+
+    # Seed health gauges immediately so dashboards don't show "No data"
+    try:
+        from app.core.metrics import check_overall_system_health
+        _ = check_overall_system_health()
+    except Exception as e:
+        logging.getLogger(__name__).debug("initial_health_seed_failed", extra={"error": str(e)})
 
 
 @app.middleware("http")
@@ -224,26 +247,12 @@ def health_check():
         from app.core.celery import celery_app
         
         # Check 1: Basic ping with shorter timeout for blackbox
-        pongs = celery_app.control.ping(timeout=2.0)
+        pongs = celery_app.control.ping(timeout=1.0)
         if not isinstance(pongs, list) or len(pongs) == 0:
             statuses["celery_workers"] = "error: no workers responding"
         else:
-            # Check 2: Get worker stats and active tasks with shorter timeout
-            try:
-                stats = celery_app.control.inspect().stats()
-                active = celery_app.control.inspect().active()
-                reserved = celery_app.control.inspect().reserved()
-                
-                if stats and active is not None and reserved is not None:
-                    worker_count = len(stats)
-                    total_active = sum(len(tasks) for tasks in (active.values() if active else []))
-                    total_reserved = sum(len(tasks) for tasks in (reserved.values() if reserved else []))
-                    statuses["celery_workers"] = f"ok: {worker_count} workers, {total_active} active, {total_reserved} reserved"
-                else:
-                    statuses["celery_workers"] = "error: workers not responding to inspect commands"
-            except Exception as e:
-                # Fallback to just ping if inspect fails
-                statuses["celery_workers"] = f"ok: {len(pongs)} workers responding"
+            # For blackbox health checks, just use ping to be fast
+            statuses["celery_workers"] = f"ok: {len(pongs)} workers responding"
     except Exception as e:
         statuses["celery_workers"] = f"error: {e}"
 

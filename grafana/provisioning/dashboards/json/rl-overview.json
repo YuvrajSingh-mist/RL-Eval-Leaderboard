@@ -186,53 +186,119 @@
       "gridPos": {"x": 12, "y": 64, "w": 12, "h": 8},
       "fieldConfig": {"defaults": {"unit": "short"}},
       "targets": [
-        {"expr": "sum(increase(http_requests_total[$__range]))", "refId": "A"}
+        {"expr": "sum(increase(http_request_size_bytes_count[$__range]))", "refId": "A"}
       ]
     }
     ,
     {
-      "type": "graph",
+      "type": "timeseries",
       "title": "Monthly Unique Visitors (JWT)",
       "gridPos": {"x": 0, "y": 72, "w": 12, "h": 8},
-      "bars": false,
-      "lines": true,
-      "points": true,
-      "timeFrom": "365d",
-      "maxDataPoints": 13,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 2,
+            "fillOpacity": 80,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "gradientMode": "scheme",
+            "spanNulls": false
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "sum by (month) (unique_visitors_month)",
+          "expr": "unique_visitors_month",
           "refId": "A",
-          "legendFormat": "{{month}}"
+          "legendFormat": "{{month}}",
+          "interval": "1M",
+          "intervalFactor": 1
         }
-      ]
+      ],
+      "timeFrom": "12M",
+      "timeShift": null
     },
     {
-      "type": "graph",
-      "title": "Monthly API Requests",
-      "gridPos": {"x": 12, "y": 80, "w": 12, "h": 8},
-      "bars": true,
-      "lines": false,
-      "timeFrom": "365d",
-      "maxDataPoints": 13,
+      "type": "timeseries",
+      "title": "API Requests Rate",
+      "gridPos": {"x": 12, "y": 72, "w": 12, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "showPoints": "auto",
+            "pointSize": 4
+          }
+        }
+      },
       "targets": [
         {
-          "expr": "sum(increase(http_requests_total[30d]))",
+          "expr": "sum(rate(http_request_size_bytes_count[$__interval]))",
           "refId": "A",
-          "interval": "30d",
-          "legendFormat": "requests"
+          "legendFormat": "requests/sec"
         }
       ]
     },
     {
-      "type": "graph",
-      "title": "All-time Unique Visitors",
+      "type": "stat",
+      "title": "Today's Unique Visitors",
       "gridPos": {"x": 0, "y": 88, "w": 12, "h": 8},
-      "bars": false,
-      "lines": true,
-      "points": true,
-      "timeFrom": "365d",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "blue", "value": 10},
+              {"color": "purple", "value": 100}
+            ]
+          }
+        }
+      },
+      "targets": [
+        {"datasource": "Prometheus", "expr": "max(unique_visitors_today)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "All-time Unique Visitors",
+      "gridPos": {"x": 12, "y": 88, "w": 12, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "blue", "value": 10},
+              {"color": "purple", "value": 100}
+            ]
+          }
+        }
+      },
       "targets": [
         {"datasource": "Prometheus", "expr": "max(unique_visitors_alltime)", "refId": "A"}
       ]
