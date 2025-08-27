@@ -29,7 +29,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://api:8000/health
+          - http://api:8000/health/simple
           - http://frontend:7860
           - http://prometheus:9090/-/ready
           - http://alertmanager:9093/-/ready

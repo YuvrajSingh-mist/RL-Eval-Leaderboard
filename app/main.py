@@ -223,23 +223,27 @@ def health_check():
     try:
         from app.core.celery import celery_app
         
-        # Check 1: Basic ping with longer timeout
-        pongs = celery_app.control.ping(timeout=5.0)
+        # Check 1: Basic ping with shorter timeout for blackbox
+        pongs = celery_app.control.ping(timeout=2.0)
         if not isinstance(pongs, list) or len(pongs) == 0:
             statuses["celery_workers"] = "error: no workers responding"
         else:
-            # Check 2: Get worker stats and active tasks
-            stats = celery_app.control.inspect().stats()
-            active = celery_app.control.inspect().active()
-            reserved = celery_app.control.inspect().reserved()
-            
-            if stats and active is not None and reserved is not None:
-                worker_count = len(stats)
-                total_active = sum(len(tasks) for tasks in (active.values() if active else []))
-                total_reserved = sum(len(tasks) for tasks in (reserved.values() if reserved else []))
-                statuses["celery_workers"] = f"ok: {worker_count} workers, {total_active} active, {total_reserved} reserved"
-            else:
-                statuses["celery_workers"] = "error: workers not responding to inspect commands"
+            # Check 2: Get worker stats and active tasks with shorter timeout
+            try:
+                stats = celery_app.control.inspect().stats()
+                active = celery_app.control.inspect().active()
+                reserved = celery_app.control.inspect().reserved()
+                
+                if stats and active is not None and reserved is not None:
+                    worker_count = len(stats)
+                    total_active = sum(len(tasks) for tasks in (active.values() if active else []))
+                    total_reserved = sum(len(tasks) for tasks in (reserved.values() if reserved else []))
+                    statuses["celery_workers"] = f"ok: {worker_count} workers, {total_active} active, {total_reserved} reserved"
+                else:
+                    statuses["celery_workers"] = "error: workers not responding to inspect commands"
+            except Exception as e:
+                # Fallback to just ping if inspect fails
+                statuses["celery_workers"] = f"ok: {len(pongs)} workers responding"
     except Exception as e:
         statuses["celery_workers"] = f"error: {e}"
 

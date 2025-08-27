@@ -77,6 +77,15 @@ groups:
           summary: Blackbox probe failed
           description: 'HTTP probe failed for {{ $labels.instance }}.'
 
+      - alert: APIHealthCheckFail
+        expr: probe_success{instance="http://api:8000/health"} == 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: API health check is failing
+          description: 'API health endpoint is not responding properly. Check API logs and worker status.'
+
       - alert: RedisExporterTargetDown
         expr: up{job="redis"} == 0
         for: 20s
