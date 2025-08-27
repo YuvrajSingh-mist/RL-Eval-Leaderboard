@@ -89,10 +89,11 @@ services:
     networks:
       - rl-net
     healthcheck:
-      test: ["CMD", "celery", "-A", "app.core.celery", "inspect", "ping"]
-      interval: 30s
+      test: ["CMD", "celery", "-A", "app.core.celery", "inspect", "ping", "--timeout=5"]
+      interval: 15s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -132,10 +133,11 @@ services:
     networks:
       - rl-net
     healthcheck:
-      test: ["CMD", "celery", "-A", "app.core.celery", "inspect", "ping"]
-      interval: 30s
+      test: ["CMD", "celery", "-A", "app.core.celery", "inspect", "ping", "--timeout=5"]
+      interval: 15s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
     dns:
       - 8.8.8.8
       - 1.1.1.1

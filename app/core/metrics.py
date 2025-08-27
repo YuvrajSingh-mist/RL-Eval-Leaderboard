@@ -99,6 +99,24 @@ CELERY_WORKER_HEALTH = Gauge(
     **_gauge_kwargs,
 )
 
+CELERY_WORKER_COUNT = Gauge(
+    "celery_worker_count",
+    "Number of active Celery workers",
+    **_gauge_kwargs,
+)
+
+CELERY_ACTIVE_TASKS = Gauge(
+    "celery_active_tasks",
+    "Number of active tasks across all workers",
+    **_gauge_kwargs,
+)
+
+CELERY_RESERVED_TASKS = Gauge(
+    "celery_reserved_tasks",
+    "Number of reserved tasks across all workers",
+    **_gauge_kwargs,
+)
+
 SUPABASE_STORAGE_HEALTH = Gauge(
     "supabase_storage_health",
     "Supabase storage health status (1=healthy, 0=unhealthy)",
@@ -146,14 +164,52 @@ def check_celery_worker_health():
     """Check Celery worker health and update metrics"""
     try:
         from app.core.celery import celery_app
-        pongs = celery_app.control.ping(timeout=1.0)
-        if isinstance(pongs, list) and len(pongs) > 0:
-            CELERY_WORKER_HEALTH.set(1)  # Healthy
-            return True
-        else:
+        
+        # Check 1: Basic ping with longer timeout
+        pongs = celery_app.control.ping(timeout=5.0)
+        if not isinstance(pongs, list) or len(pongs) == 0:
             CELERY_WORKER_HEALTH.set(0)  # Unhealthy
-            logging.getLogger(__name__).error("No Celery workers responding")
+            logging.getLogger(__name__).error("No Celery workers responding to ping")
             return False
+        
+        # Check 2: Get active workers and their stats
+        stats = celery_app.control.inspect().stats()
+        if not stats:
+            CELERY_WORKER_HEALTH.set(0)  # Unhealthy
+            logging.getLogger(__name__).error("No Celery worker stats available")
+            return False
+        
+        # Check 3: Get active tasks to see if workers are processing
+        active = celery_app.control.inspect().active()
+        if active is None:
+            CELERY_WORKER_HEALTH.set(0)  # Unhealthy
+            logging.getLogger(__name__).error("Cannot get active tasks from workers")
+            return False
+        
+        # Check 4: Get reserved tasks (tasks that have been received but not yet executed)
+        reserved = celery_app.control.inspect().reserved()
+        if reserved is None:
+            CELERY_WORKER_HEALTH.set(0)  # Unhealthy
+            logging.getLogger(__name__).error("Cannot get reserved tasks from workers")
+            return False
+        
+        # Log worker status for debugging
+        worker_count = len(stats)
+        total_active = sum(len(tasks) for tasks in (active.values() if active else []))
+        total_reserved = sum(len(tasks) for tasks in (reserved.values() if reserved else []))
+        
+        # Update metrics
+        CELERY_WORKER_COUNT.set(worker_count)
+        CELERY_ACTIVE_TASKS.set(total_active)
+        CELERY_RESERVED_TASKS.set(total_reserved)
+        
+        logging.getLogger(__name__).info(
+            f"Celery workers healthy: {worker_count} workers, {total_active} active tasks, {total_reserved} reserved tasks"
+        )
+        
+        CELERY_WORKER_HEALTH.set(1)  # Healthy
+        return True
+        
     except Exception as e:
         CELERY_WORKER_HEALTH.set(0)  # Unhealthy
         logging.getLogger(__name__).error(f"Celery worker health check failed: {str(e)}")

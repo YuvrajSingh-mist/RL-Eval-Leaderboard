@@ -149,6 +149,24 @@ groups:
           summary: Celery worker error persisting
           description: Celery workers have been down for 5 minutes. No tasks can be processed.
 
+      - alert: CeleryWorkerOverload
+        expr: celery_reserved_tasks > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Celery workers are overloaded
+          description: More than 10 tasks are waiting to be processed. Workers may be overloaded or stuck.
+
+      - alert: CeleryWorkerStuck
+        expr: celery_active_tasks > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Celery workers may be stuck
+          description: More than 5 tasks have been active for 5 minutes. Workers may be stuck processing tasks.
+
       - alert: SupabaseStorageDown
         expr: supabase_storage_health == 0
         for: 30s
