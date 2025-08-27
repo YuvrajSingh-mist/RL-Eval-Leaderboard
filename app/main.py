@@ -257,7 +257,7 @@ def health_check():
     except Exception as e:
         statuses["storage"] = f"error: {e}"
 
-    healthy = all(v == "ok" for v in statuses.values())
+    healthy = all(v.startswith("ok") for v in statuses.values())
     
     # Log health status for monitoring
     if not healthy:
