@@ -311,6 +311,90 @@ if __name__ == "__main__":
     main()
 ```
 
+### Real-time Progress Monitoring with Weights & Biases
+
+For real-time progress monitoring during evaluation, you can include Weights & Biases (wandb) in your submission. This allows you to track training progress, metrics, and charts in real-time.
+
+**Example with wandb integration:**
+
+```python
+import sys
+import json
+import logging
+import wandb
+import numpy as np
+
+logger = logging.getLogger(__name__)
+
+def train(env_id: str) -> dict:
+    """Run your algorithm with wandb logging for real-time monitoring."""
+    
+    # Initialize wandb for this evaluation run
+    wandb.init(
+        project="rl-leaderboard-evaluation",
+        name=f"submission-{env_id}",
+        config={
+            "env_id": env_id,
+            "algorithm": "your-algorithm-name",
+            "submission_id": "your-submission-id"
+        }
+    )
+    
+    # Your training loop
+    episode_rewards = []
+    for episode in range(100):
+        # Your training logic here
+        episode_reward = np.random.normal(100, 20)  # Example
+        episode_rewards.append(episode_reward)
+        
+        # Log to wandb for real-time monitoring
+        wandb.log({
+            "episode": episode,
+            "episode_reward": episode_reward,
+            "avg_reward": np.mean(episode_rewards),
+            "std_reward": np.std(episode_rewards)
+        })
+    
+    # Close wandb run
+    wandb.finish()
+    
+    return {
+        "score": float(np.mean(episode_rewards)),
+        "metrics": episode_rewards
+    }
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Missing environment ID"}))
+        sys.exit(1)
+
+    env_id = sys.argv[1]
+    logger.info(f"Starting evaluation for env_id={env_id}")
+
+    result = train(env_id)
+    if not isinstance(result, dict) or "score" not in result:
+        print(json.dumps({"error": "Result must be a dict containing 'score'"}))
+        sys.exit(1)
+
+    # Print exactly one final JSON line. Do not print anything after this.
+    print(json.dumps({
+        "score": float(result["score"]),
+        "metrics": result.get("metrics", [])
+    }))
+
+if __name__ == "__main__":
+    main()
+```
+
+**Benefits of wandb integration:**
+- 📊 **Real-time charts**: See training progress as it happens
+- 📈 **Live metrics**: Monitor rewards, losses, and other metrics
+- 🔍 **Debugging**: Identify issues during training
+- 📱 **Mobile access**: Check progress from anywhere
+- 🎯 **Performance tracking**: Compare different runs and algorithms
+
+**Note**: The evaluator container includes wandb support, so you can use `import wandb` directly in your submissions.
+
 ### Example: Simple Q-learning agent (discrete envs)
 
 This example mirrors `example_agents/q_learning.py` and satisfies the evaluator contract. It expects a Gymnasium environment ID and prints a single JSON line with a numeric `score` and optional `metrics`.
