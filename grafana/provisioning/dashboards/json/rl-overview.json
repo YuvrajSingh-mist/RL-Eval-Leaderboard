@@ -197,28 +197,12 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "bars",
-            "lineWidth": 2,
-            "fillOpacity": 80,
+            "drawStyle": "line",
+            "lineWidth": 3,
+            "fillOpacity": 15,
             "showPoints": "auto",
-            "pointSize": 4,
-            "gradientMode": "scheme",
-            "spanNulls": false
-          },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
+            "pointSize": 4
+          }
         }
       },
       "targets": [
@@ -226,13 +210,9 @@
           "datasource": "Prometheus",
           "expr": "unique_visitors_month",
           "refId": "A",
-          "legendFormat": "{{month}}",
-          "interval": "1M",
-          "intervalFactor": 1
+          "legendFormat": "{{month}}"
         }
-      ],
-      "timeFrom": "12M",
-      "timeShift": null
+      ]
     },
     {
       "type": "timeseries",
