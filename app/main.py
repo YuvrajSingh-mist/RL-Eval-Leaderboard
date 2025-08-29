@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, PlainTextResponse
 from app.api import submissions, leaderboard
 from app.api import alerts
 from app.api import visitor
@@ -204,6 +204,42 @@ app.include_router(submissions.router, prefix="/api", tags=["submissions"])
 app.include_router(leaderboard.router, prefix="/api/leaderboard", tags=["leaderboard"])
 app.include_router(alerts.router, prefix="/api", tags=["alerts"])
 app.include_router(visitor.router, prefix="/api", tags=["visitor"])
+
+# --- Basic SEO endpoints ---
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Sitemap: {}/sitemap.xml".format(settings.PUBLIC_BASE_URL.rstrip("/")) if settings.PUBLIC_BASE_URL else "",
+    ]
+    text = "\n".join([l for l in lines if l]) + "\n"
+    return PlainTextResponse(content=text, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    import datetime
+    base = settings.PUBLIC_BASE_URL.rstrip("/") if settings.PUBLIC_BASE_URL else ""
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Known public routes. Gradio is typically served under a separate service; list root if base set.
+    urls = []
+    if base:
+        urls.append({"loc": base + "/", "changefreq": "hourly", "priority": "0.8"})
+    # API documentation could be indexed if enabled (FastAPI docs routes). Add conservative entries.
+    # Note: If you expose the Gradio UI on the same domain, include it as '/'.
+
+    xml_urls = []
+    for u in urls:
+        xml_urls.append(
+            f"<url><loc>{u['loc']}</loc><lastmod>{now}</lastmod><changefreq>{u['changefreq']}</changefreq><priority>{u['priority']}</priority></url>"
+        )
+    body = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"\
+        "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"\
+        + "".join(xml_urls) + "</urlset>"
+    )
+    return Response(content=body, media_type="application/xml")
 
 @app.get("/health")
 def health_check():

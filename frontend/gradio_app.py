@@ -8,6 +8,8 @@ import os
 import logging
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 PORT = int(os.getenv("PORT", "7860"))
+# Public site URL for SEO; uses environment variable or defaults to Render URL
+SITE_URL = os.getenv("PUBLIC_BASE_URL", "https://rl-eval-leaderboard.onrender.com").rstrip("/")
 GITHUB_URL = "https://github.com/YuvrajSingh-mist/RL-Eval-Leaderboard"
 _last_submission_id = None
 logger = logging.getLogger(__name__)
@@ -261,6 +263,43 @@ with gr.Blocks(title="SimpleRL Leaderboard", css="""
 @media (max-width: 520px) { .gh-text { display: none; } }
 """) as demo:
     gr.Markdown("# 🏆 SimpleRL Leaderboard")
+    # Inject SEO meta tags into <head>
+    gr.HTML(
+        """
+        <script>
+        (function(){
+          try {
+            var head = document.head || document.getElementsByTagName('head')[0];
+            function setMeta(attr, name, content){
+              var selector = attr + '="' + name + '"';
+              var el = head.querySelector('meta[' + selector + ']');
+              if (!el) { el = document.createElement('meta'); el.setAttribute(attr, name); head.appendChild(el); }
+              el.setAttribute('content', content);
+            }
+            function setLink(rel, href){
+              var el = head.querySelector('link[rel="' + rel + '"]');
+              if (!el) { el = document.createElement('link'); el.setAttribute('rel', rel); head.appendChild(el); }
+              el.setAttribute('href', href);
+            }
+            var url = '%s';
+            var title = 'SimpleRL Leaderboard – Evaluate and Rank RL Agents';
+            var desc = 'Submit Python RL agents for automatic evaluation on Gym environments. View scores and rankings on the live leaderboard.';
+            document.title = title;
+            setMeta('name', 'description', desc);
+            setMeta('name', 'robots', 'index,follow');
+            setMeta('property', 'og:type', 'website');
+            setMeta('property', 'og:title', title);
+            setMeta('property', 'og:description', desc);
+            setMeta('property', 'og:url', url + '/');
+            setMeta('name', 'twitter:card', 'summary');
+            setMeta('name', 'twitter:title', title);
+            setMeta('name', 'twitter:description', desc);
+            setLink('canonical', url + '/');
+          } catch(e) { /* noop */ }
+        })();
+        </script>
+        """ % (SITE_URL)
+    )
     gr.HTML(f"""
     <a class=\"gh-btn\" href=\"{GITHUB_URL}\" target=\"_blank\" rel=\"noopener\" aria-label=\"View project on GitHub\"> 
       <span class=\"gh-ico\">🐙</span>

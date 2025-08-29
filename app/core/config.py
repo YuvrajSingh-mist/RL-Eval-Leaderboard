@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     VISITOR_JWT_AUDIENCE: str = os.getenv("VISITOR_JWT_AUDIENCE", "visitor")
     VISITOR_JWT_TTL_DAYS: int = int(os.getenv("VISITOR_JWT_TTL_DAYS", "30"))
 
+    # Public base URL used for SEO (sitemap/robots). Example: https://leaderboard.example.com
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "https://rl-eval-leaderboard.onrender.com")
+
     class Config:
         # Let BaseSettings read from project .env if present (local dev).
         env_file = "../../.env"

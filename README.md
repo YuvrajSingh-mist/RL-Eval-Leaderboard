@@ -89,6 +89,9 @@ cd RL\ Leaderboard
 ### Environment
 Create a `.env` file at the repo root (values are examples; use your own secrets):
 ```env
+# SEO Configuration
+PUBLIC_BASE_URL=https://rl-eval-leaderboard.onrender.com
+
 # FastAPI app security
 SECRET_KEY=please-change-this
 
