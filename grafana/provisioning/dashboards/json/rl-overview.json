@@ -146,21 +146,47 @@
       ]
     },
     {
-      "type": "gauge",
+      "type": "timeseries",
       "title": "Host CPU Usage %",
       "gridPos": {"x": 0, "y": 64, "w": 12, "h": 8},
-      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "showPoints": "auto",
+            "pointSize": 4
+          }
+        }
+      },
       "targets": [
-        {"expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[$__interval])) * 100)"}
+        {"expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[$__interval])) * 100)", "legendFormat": "CPU Usage %"}
       ]
     },
     {
-      "type": "gauge",
+      "type": "timeseries",
       "title": "Host Memory Usage %",
       "gridPos": {"x": 12, "y": 64, "w": 12, "h": 8},
-      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "showPoints": "auto",
+            "pointSize": 4
+          }
+        }
+      },
       "targets": [
-        {"expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"}
+        {"expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "legendFormat": "Memory Usage %"}
       ]
     },
     {
@@ -261,26 +287,28 @@
       ]
     },
     {
-      "type": "stat",
-      "title": "All-time Unique Visitors",
+      "type": "timeseries",
+      "title": "All-time Unique Visitors (Historical)",
       "gridPos": {"x": 12, "y": 88, "w": 12, "h": 8},
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {"color": "green", "value": 0},
-              {"color": "blue", "value": 10},
-              {"color": "purple", "value": 100}
-            ]
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "showPoints": "auto",
+            "pointSize": 4
           }
         }
       },
       "targets": [
-        {"datasource": "Prometheus", "expr": "max(unique_visitors_alltime)", "refId": "A"}
+        {
+          "datasource": "Prometheus", 
+          "expr": "unique_visitors_alltime", 
+          "refId": "A",
+          "legendFormat": "All-time Visitors"
+        }
       ]
     }
   ]

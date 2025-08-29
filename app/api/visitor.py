@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Request, Response, HTTPException
 import logging
 from app.core.config import settings
@@ -6,7 +7,7 @@ import jwt
 import uuid
 import datetime as dt
 import redis
-from prometheus_client import Gauge
+from prometheus_client import Gauge, Counter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -29,6 +30,8 @@ UNIQUE_VISITORS_TODAY = Gauge("unique_visitors_today", "Approx unique visitors t
 UNIQUE_VISITORS_7D = Gauge("unique_visitors_7d", "Approx unique visitors over last 7 days (JWT)", **_gauge_kwargs)
 UNIQUE_VISITORS_ALLTIME = Gauge("unique_visitors_alltime", "All-time unique visitors (JWT)", **_gauge_kwargs)
 UNIQUE_VISITORS_MONTH = Gauge("unique_visitors_month", "Unique visitors by month (JWT)", labelnames=("month",), **_gauge_kwargs)
+# Gauge to track historical progression of all-time visitors with timestamp
+UNIQUE_VISITORS_ALLTIME_HISTORY = Gauge("unique_visitors_alltime_history", "Historical progression of all-time unique visitors (JWT)", labelnames=("timestamp",), **_gauge_kwargs)
 
 def _hll_key(d: dt.date) -> str:
     return f"hll:visitors:{d.isoformat()}"
@@ -116,6 +119,11 @@ def visitor_pixel(request: Request):
             _redis().pfadd(_hll_key(today), vid)
             _redis().pfadd(_hll_month_key(today), vid)
             _redis().pfadd(_HLL_ALLTIME_KEY, vid)
+            
+            # Update historical metric immediately when visitor is tracked
+            alltime_count = _redis().pfcount(_HLL_ALLTIME_KEY)
+            current_time = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+            UNIQUE_VISITORS_ALLTIME_HISTORY.labels(timestamp=current_time).set(float(alltime_count))
     except Exception as e:
         logger.exception(
             "visitor_hll_update_failed",
@@ -147,6 +155,15 @@ def refresh_unique_visitor_metrics() -> None:
         today = dt.date.today()
         keys7 = [_hll_key(today - dt.timedelta(days=i)) for i in range(7)]
         
+
+        # Check if we need to clear old daily data (older than 7 days)
+        for i in range(7, 30):  # Clear data older than 7 days
+            old_date = today - dt.timedelta(days=i)
+            old_key = _hll_key(old_date)
+            if _redis().exists(old_key):
+                _redis().delete(old_key)
+                logger.debug(f"Cleared old daily visitor data for {old_date}")
+        
         # Get counts from Redis
         today_count = _redis().pfcount(_hll_key(today))
         week_count = _redis().pfcount(*keys7)
@@ -156,6 +173,10 @@ def refresh_unique_visitor_metrics() -> None:
         UNIQUE_VISITORS_TODAY.set(float(today_count))
         UNIQUE_VISITORS_7D.set(float(week_count))
         UNIQUE_VISITORS_ALLTIME.set(float(alltime_count))
+        
+        # Update historical gauge with current timestamp
+        current_time = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+        UNIQUE_VISITORS_ALLTIME_HISTORY.labels(timestamp=current_time).set(float(alltime_count))
         
         logger.info("visitor_metrics_refreshed", extra={
             "today_count": today_count,

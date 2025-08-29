@@ -138,6 +138,13 @@ OVERALL_SYSTEM_HEALTH = Gauge(
     **_gauge_kwargs,
 )
 
+# Set initial values for health metrics so they appear in Prometheus
+DATABASE_HEALTH.set(0)  # Start as unhealthy until checked
+REDIS_HEALTH.set(0)  # Start as unhealthy until checked
+CELERY_WORKER_HEALTH.set(0)  # Start as unhealthy until checked
+SUPABASE_STORAGE_HEALTH.set(0)  # Start as unhealthy until checked
+OVERALL_SYSTEM_HEALTH.set(0)  # Start as unhealthy until checked
+
 
 def check_database_health():
     """Check database health and update metrics"""
@@ -297,7 +304,7 @@ def init_fastapi_instrumentation(app) -> None:
     """
     try:
         from prometheus_fastapi_instrumentator import Instrumentator  # type: ignore
-        from prometheus_client import CollectorRegistry, multiprocess
+        from prometheus_client import CollectorRegistry, multiprocess, REGISTRY
     except Exception as e:
         logging.getLogger(__name__).warning("fastapi_instrumentator_unavailable", extra={"error": str(e)})
         return
@@ -310,10 +317,12 @@ def init_fastapi_instrumentation(app) -> None:
         multiprocess.MultiProcessCollector(registry)
         instrumentator = Instrumentator(registry=registry)
     else:
-        instrumentator = Instrumentator()
+        # Use the default registry that includes our custom metrics
+        instrumentator = Instrumentator(registry=REGISTRY)
     
     instrumentator.instrument(app)
-    instrumentator.expose(app, include_in_schema=False)
+    # Don't expose the instrumentator's /metrics endpoint - we'll create our own
+    # instrumentator.expose(app, include_in_schema=False)
 
 
 def start_worker_metrics_server(port: Optional[int] = None) -> None:

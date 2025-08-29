@@ -14,7 +14,7 @@ from app.core.logging_config import setup_logging
 import logging
 import os
 import asyncio
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
 
 # Configure logging (JSON)
 setup_logging()
@@ -39,6 +39,7 @@ except Exception as _e:
 async def metrics():
     """Custom metrics endpoint that combines FastAPI metrics with our custom health metrics"""
     try:
+        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
         # Generate metrics from prometheus_client (includes our custom metrics)
         metrics_data = generate_latest()
         return Response(content=metrics_data, media_type=CONTENT_TYPE_LATEST)
@@ -333,5 +334,8 @@ def health_check():
         "components": statuses,
         "timestamp": datetime.datetime.utcnow().isoformat(),
     }
+
+
+
 
 
