@@ -38,20 +38,28 @@ celery_app.conf.update(
 
 @celery_app.on_after_configure.connect
 def setup_observability(sender, **kwargs):
+    logger = logging.getLogger(__name__)
+    logger.info("Setting up observability for Celery worker")
+    
     # Start metrics endpoint for worker
     try:
+        logger.info("Starting worker metrics server...")
         start_worker_metrics_server()
+        logger.info("Worker metrics server started successfully")
     except Exception as e:
-        logging.getLogger(__name__).error(f"Failed to start worker metrics server: {str(e)}")
+        logger.error(f"Failed to start worker metrics server: {str(e)}")
+    
     # Queue length collector for Celery broker
     try:
+        logger.info("Starting queue length collector...")
         start_celery_queue_length_collector(
             os.getenv("CELERY_BROKER_URL", "redis://redis:6379/1"),
             queue_names=["celery", "heavy"],
             interval_seconds=10,
         )
+        logger.info("Queue length collector started successfully")
     except Exception as e:
-        logging.getLogger(__name__).error(f"Failed to start queue length collector: {str(e)}")
+        logger.error(f"Failed to start queue length collector: {str(e)}")
 
 
 # ---- Celery task lifecycle structured logs ----

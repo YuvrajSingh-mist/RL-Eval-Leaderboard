@@ -239,11 +239,18 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_DEFAULT_INSTANCE_NAME=RL-Eval-Leaderboard
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_USERS_DEFAULT_THEME=light
+      - GF_DATE_FORMATS_DEFAULT_TIMEZONE=Asia/Kolkata
+      - GF_DATE_FORMATS_DEFAULT_DATE_FORMAT=YYYY-MM-DD
+      - GF_DATE_FORMATS_DEFAULT_TIME_FORMAT=HH:mm:ss
     env_file: .env
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/config/grafana.ini:/etc/grafana/grafana.ini:ro
       - ./scripts/grafana_user_provision.sh:/docker-entrypoint-initgrafana.d/10-create-user.sh:ro
     depends_on:
       - prometheus

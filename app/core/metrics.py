@@ -7,6 +7,10 @@ from prometheus_client import Counter, Histogram, Gauge, start_http_server
 from threading import Thread, Event
 import redis as redis_lib
 
+# Simple metrics configuration (no multiprocess)
+_is_mp = False
+_gauge_kwargs = {}
+
 # Ensure Prometheus multiprocess directory exists if needed
 mp_dir = os.getenv("PROMETHEUS_MULTIPROC_DIR")
 if mp_dir:
@@ -78,9 +82,6 @@ LEADERBOARD_QUERY_DURATION_SECONDS = Histogram(
 )
 
 # Celery queue backlog
-# Temporarily disable multiprocess mode to fix startup issues
-_is_mp = False  # bool(os.getenv("PROMETHEUS_MULTIPROC_DIR"))
-_gauge_kwargs = {}  # {"multiprocess_mode": "max"} if _is_mp else {}
 CELERY_QUEUE_LENGTH = Gauge(
     "celery_queue_length",
     "Length of Celery broker queue in Redis",
@@ -219,15 +220,23 @@ def check_celery_worker_health():
         CELERY_WORKER_COUNT.labels(queue="celery").set(0)
         CELERY_WORKER_COUNT.labels(queue="heavy").set(0)
         
-        # Count workers by queue based on their configuration
+        # Get active queues for each worker to properly categorize them
+        active_queues = celery_app.control.inspect().active_queues()
+        if active_queues is None:
+            active_queues = {}
+        
+        # Count workers by queue based on their actual queue configuration
         celery_workers = 0
         heavy_workers = 0
         
         for worker_name, worker_stats in stats.items():
-            # Check if worker can handle heavy queue (has both queues or heavy queue)
-            if 'heavy' in worker_stats.get('pool', {}).get('queues', []) or 'heavy' in worker_name.lower():
+            worker_queues = active_queues.get(worker_name, [])
+            queue_names = [q.get('name', '') for q in worker_queues]
+            
+            # Check if worker can handle heavy queue
+            if 'heavy' in queue_names:
                 heavy_workers += 1
-            else:
+            if 'celery' in queue_names:
                 celery_workers += 1
         
         CELERY_WORKER_COUNT.labels(queue="celery").set(celery_workers)
@@ -332,35 +341,49 @@ def start_worker_metrics_server(port: Optional[int] = None) -> None:
     When PROMETHEUS_MULTIPROC_DIR is set, we expose a registry backed by
     prometheus_client.multiprocess.MultiProcessCollector so that counters
     aggregated from child processes are visible to Prometheus.
-    """
-    p = int(port or os.getenv("WORKER_METRICS_PORT", "9100"))
+    """    
+    logger = logging.getLogger(__name__)
+    p = int(port or os.getenv("WORKER_METRICS_PORT", "9101"))
+    logger.info(f"Starting worker metrics server on port {p}")
+    
     try:
         mp_dir = os.getenv("PROMETHEUS_MULTIPROC_DIR")
+        logger.info(f"PROMETHEUS_MULTIPROC_DIR: {mp_dir}")
+        
         if mp_dir:
             try:
                 # Ensure directory exists and clean stale files on startup
                 os.makedirs(mp_dir, exist_ok=True)
+                logger.info(f"Created/verified multiprocess directory: {mp_dir}")
+                
                 for fname in os.listdir(mp_dir):
                     if fname.endswith(".db"):
                         try:
                             os.remove(os.path.join(mp_dir, fname))
+                            logger.info(f"Cleaned up stale file: {fname}")
                         except Exception as e:
-                            logging.getLogger(__name__).debug("mp_dir_cleanup_failed", extra={"file": fname, "error": str(e)})
+                            logger.debug("mp_dir_cleanup_failed", extra={"file": fname, "error": str(e)})
             except Exception as e:
                 # best effort; do not crash worker
-                logging.getLogger(__name__).debug("mp_dir_prepare_failed", extra={"error": str(e)})
+                logger.debug("mp_dir_prepare_failed", extra={"error": str(e)})
 
             # Build a dedicated multiprocess registry
             from prometheus_client import CollectorRegistry, multiprocess
 
             registry = CollectorRegistry()
             multiprocess.MultiProcessCollector(registry)
-            start_http_server(p, registry=registry)
+            logger.info(f"Starting multiprocess HTTP server on 0.0.0.0:{p}")
+            start_http_server(p, addr='0.0.0.0', registry=registry)
+            logger.info("Multiprocess HTTP server started successfully")
         else:
-            start_http_server(p)
+            logger.info(f"Starting single-process HTTP server on 0.0.0.0:{p}")
+            start_http_server(p, addr='0.0.0.0')
+            logger.info("Single-process HTTP server started successfully")
     except OSError as e:
         # Port already in use; ignore to prevent crash in forked workers
-        logging.getLogger(__name__).debug("worker_metrics_port_in_use", extra={"port": p, "error": str(e)})
+        logger.error(f"Failed to start worker metrics server on port {p}: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error starting worker metrics server: {str(e)}")
 
 
 def start_celery_queue_length_collector(

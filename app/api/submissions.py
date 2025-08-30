@@ -10,6 +10,7 @@ from app.core.metrics import (
     SUBMISSIONS_UPLOAD_BYTES_TOTAL,
     SUBMISSIONS_VALIDATION_FAILURES_TOTAL,
 )
+from app.core.real_metrics import real_metrics
 from typing import Set
 import uuid
 import logging
@@ -81,6 +82,7 @@ async def submit_rl_script(
     has_one = bool(file is not None)
     if not has_many and not has_one:
         SUBMISSIONS_VALIDATION_FAILURES_TOTAL.labels(reason="no_file").inc()
+        real_metrics.record_validation_failure("no_file")
         raise HTTPException(400, "Please upload at least one Python file")
 
     # Multi-file path
@@ -91,10 +93,12 @@ async def submit_rl_script(
             if not f.filename:
                 logger.warning("Empty filename in upload", extra={"client_id": client_id})
                 SUBMISSIONS_VALIDATION_FAILURES_TOTAL.labels(reason="empty_filename").inc()
+                real_metrics.record_validation_failure("empty_filename")
                 raise HTTPException(400, "Invalid file in upload")
             safe_names.append(os.path.basename(f.filename))
         if not any(name.lower().endswith('.py') for name in safe_names):
             SUBMISSIONS_VALIDATION_FAILURES_TOTAL.labels(reason="no_py").inc()
+            real_metrics.record_validation_failure("no_py")
             raise HTTPException(400, "At least one Python (.py) file is required when uploading multiple files")
 
         # Choose main file
@@ -112,9 +116,11 @@ async def submit_rl_script(
         else:
             # Explicitly require main_file when multiple files are uploaded
             SUBMISSIONS_VALIDATION_FAILURES_TOTAL.labels(reason="missing_main").inc()
+            real_metrics.record_validation_failure("missing_main")
             raise HTTPException(400, "main_file is required when uploading multiple files")
         if not chosen_main.lower().endswith('.py'):
             SUBMISSIONS_VALIDATION_FAILURES_TOTAL.labels(reason="main_not_py").inc()
+r            real_metrics.record_validation_failure("main_not_py")
             raise HTTPException(400, "main_file must be a Python (.py) file")
 
         # Build tar archive in-memory; include all files at root
@@ -186,6 +192,7 @@ async def submit_rl_script(
                 extra={"client_id": client_id},
             )
             SUBMISSIONS_VALIDATION_FAILURES_TOTAL.labels(reason="not_py").inc()
+            real_metrics.record_validation_failure("not_py")
             raise HTTPException(400, "Only Python scripts allowed")
         try:
             content = await file.read()

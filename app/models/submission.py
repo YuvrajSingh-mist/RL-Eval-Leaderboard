@@ -11,6 +11,7 @@ class Submission(Base):
     env_id = Column(String, index=True)
     algorithm = Column(String, index=True)
     score = Column(Float, nullable=True)
+    duration_seconds = Column(Float, nullable=True)  # Actual evaluation duration
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="pending")  # pending, processing, completed, failed
     error = Column(String, nullable=True)

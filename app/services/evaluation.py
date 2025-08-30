@@ -13,6 +13,7 @@ from app.core.metrics import (
     EVALUATION_DURATION_SECONDS,
     DurationTimer,
 )
+from app.core.real_metrics import real_metrics
 from app.core.client import supabase_client
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ def evaluate_submission(submission_id: str) -> dict:
         if is_success:
             # Successful evaluation
             submission.score = parsed_output["score"]
+            submission.duration_seconds = timer.seconds  # Store REAL duration
             submission.status = "completed"
 
             # Detailed per-episode metrics removed
@@ -100,6 +102,8 @@ def evaluate_submission(submission_id: str) -> dict:
             try:
                 EVALUATION_COMPLETED_TOTAL.labels(env_id=submission.env_id).inc()
                 EVALUATION_DURATION_SECONDS.labels(env_id=submission.env_id).observe(timer.seconds)
+                # Record REAL metrics in Redis
+                real_metrics.record_evaluation_duration(submission.env_id, timer.seconds)
             except Exception as e:
                 logger.debug(
                     "metrics_update_failed_after_success",
@@ -123,6 +127,7 @@ def evaluate_submission(submission_id: str) -> dict:
             return {
                 "status": "completed", 
                 "score": submission.score,
+                "duration_seconds": timer.seconds,  # Include REAL duration
                 "name": submission.user_id,  # user_id field stores the name
                 "submission_id": submission_id,
                 "env_id": submission.env_id,

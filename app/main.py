@@ -3,9 +3,11 @@ from fastapi import FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, PlainTextResponse
+from app.middleware.real_metrics import RealMetricsMiddleware
 from app.api import submissions, leaderboard
 from app.api import alerts
 from app.api import visitor
+from app.api import metrics_endpoint, prometheus_metrics
 from app.db.session import init_db
 from app.core.config import settings
 from app.services.leaderboard import redis_leaderboard
@@ -14,7 +16,7 @@ from app.core.logging_config import setup_logging
 import logging
 import os
 import asyncio
-
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 # Configure logging (JSON)
 setup_logging()
@@ -57,6 +59,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add REAL metrics middleware
+app.add_middleware(RealMetricsMiddleware)
 
 
 # Initialize database, Redis, and metrics
@@ -205,6 +210,8 @@ app.include_router(submissions.router, prefix="/api", tags=["submissions"])
 app.include_router(leaderboard.router, prefix="/api/leaderboard", tags=["leaderboard"])
 app.include_router(alerts.router, prefix="/api", tags=["alerts"])
 app.include_router(visitor.router, prefix="/api", tags=["visitor"])
+app.include_router(metrics_endpoint.router, prefix="/api", tags=["metrics"])
+app.include_router(prometheus_metrics.router, prefix="/api", tags=["prometheus"])
 
 # --- Basic SEO endpoints ---
 @app.get("/robots.txt", response_class=PlainTextResponse)
